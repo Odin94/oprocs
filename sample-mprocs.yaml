@@ -1,0 +1,8 @@
+procs:
+  ping:
+    shell: "ping -n 5 127.0.0.1"
+    autostart: false
+  echo:
+    shell: "node -e \"let i=0; setInterval(() => console.log('tick', i++), 1000)\""
+    autostart: true
+    autorestart: true
