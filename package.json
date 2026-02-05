@@ -2,16 +2,69 @@
   "name": "oprocs",
   "version": "0.1.0",
   "main": "out/main/index.js",
-  "description": "Electron UI for mprocs.yaml - run and monitor processes with a sidebar UI",
+  "description": "Run multiple processes in parallel and monitor their output",
+  "author": "Odin94",
   "private": true,
+  "repository": "github:Odin94/oprocs",
   "type": "module",
   "scripts": {
     "dev": "electron-vite",
     "build": "electron-vite build",
+    "build:win": "electron-vite build && electron-builder build --win",
+    "build:mac": "electron-vite build && electron-builder build --mac",
+    "build:linux": "electron-vite build && electron-builder build --linux",
+    "release:win": "electron-vite build && dotenv -e .env -- electron-builder build --win -p always",
+    "release:mac": "electron-vite build && dotenv -e .env -- electron-builder build --mac -p always",
+    "release:linux": "electron-vite build && dotenv -e .env -- electron-builder build --linux -p always",
     "preview": "electron-vite preview"
+  },
+  "build": {
+    "appId": "com.oprocs.app",
+    "productName": "oprocs",
+    "files": [
+      "out",
+      "package.json"
+    ],
+    "directories": {
+      "output": "release/${version}"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "Odin94",
+      "repo": "oprocs"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "${productName}-Windows-${version}-Setup.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "mac": {
+      "target": [
+        "dmg"
+      ],
+      "artifactName": "${productName}-Mac-${version}.${ext}"
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "artifactName": "${productName}-Linux-${version}.${ext}"
+    }
   },
   "dependencies": {
     "@leeoniya/ufuzzy": "^1.0.2",
+    "electron-updater": "^6.3.9",
     "js-yaml": "^4.1.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
@@ -25,7 +78,9 @@
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.3",
     "autoprefixer": "^10.4.24",
+    "dotenv-cli": "^11.0.0",
     "electron": "^33.2.0",
+    "electron-builder": "^26.4.0",
     "electron-vite": "^2.2.0",
     "postcss": "^8.5.6",
     "tailwindcss": "^3.4.19",

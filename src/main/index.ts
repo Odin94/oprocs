@@ -2,6 +2,7 @@ import { app, BrowserWindow } from "electron";
 import path from "path";
 import { ProcessManager } from "./processManager.js";
 import { setupIpc } from "./ipc.js";
+import { setupUpdater } from "./updater.js";
 
 const isDev = process.env.NODE_ENV === "development" || !app.isPackaged;
 
@@ -30,6 +31,7 @@ const createWindow = () => {
 
 app.whenReady().then(() => {
   createWindow();
+  if (app.isPackaged) setupUpdater();
 
   pm.on({
     output: (data) =>

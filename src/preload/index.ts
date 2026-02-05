@@ -16,4 +16,15 @@ contextBridge.exposeInMainWorld("electronAPI", {
   onProcStopped: (fn: (data: { procId: string; code: number | null }) => void) => {
     ipcRenderer.on("proc-stopped", (_e, data) => fn(data));
   },
+  checkForUpdates: () => ipcRenderer.invoke("updater-check"),
+  quitAndInstall: () => ipcRenderer.invoke("updater-quit-and-install"),
+  onUpdateAvailable: (fn: (version: string) => void) => {
+    ipcRenderer.on("update-available", (_e, version: string) => fn(version));
+  },
+  onUpdateDownloaded: (fn: (version: string) => void) => {
+    ipcRenderer.on("update-downloaded", (_e, version: string) => fn(version));
+  },
+  onUpdateError: (fn: (message: string) => void) => {
+    ipcRenderer.on("update-error", (_e, message: string) => fn(message));
+  },
 });

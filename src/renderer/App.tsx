@@ -29,6 +29,11 @@ declare global {
       onProcessOutput: (fn: (data: { procId: string; text: string; isStderr: boolean }) => void) => void;
       onProcStarted: (fn: (procId: string) => void) => void;
       onProcStopped: (fn: (data: { procId: string; code: number | null }) => void) => void;
+      checkForUpdates: () => Promise<void>;
+      quitAndInstall: () => Promise<void>;
+      onUpdateAvailable: (fn: (version: string) => void) => void;
+      onUpdateDownloaded: (fn: (version: string) => void) => void;
+      onUpdateError: (fn: (message: string) => void) => void;
     };
   }
 }
@@ -47,6 +52,7 @@ export default function App() {
   const [matches, setMatches] = useState<Match[]>([]);
   const [filteredIndices, setFilteredIndices] = useState<number[]>([]);
   const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
+  const [updateReadyVersion, setUpdateReadyVersion] = useState<string | null>(null);
   const searchIdRef = useRef(0);
   const workerRef = useRef<Worker | null>(null);
 
@@ -158,6 +164,7 @@ export default function App() {
           : c
       );
     });
+    api.onUpdateDownloaded((version: string) => setUpdateReadyVersion(version));
   }, []);
 
   const openConfig = async () => {
@@ -196,53 +203,76 @@ export default function App() {
   }
 
   return (
-    <div className="flex flex-1 min-h-0">
-      <aside className="w-60 shrink-0 bg-slate-800 border-r border-slate-700 flex flex-col overflow-hidden">
-        <div className="py-3 px-4 font-semibold border-b border-slate-700">oprocs</div>
-        <div className="py-3 px-4 border-b border-slate-700">
-          <button
-            onClick={openConfig}
-            type="button"
-            className="px-4 py-2 border border-slate-600 rounded-md bg-slate-800 text-slate-200 cursor-pointer text-[13px] hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Change config
-          </button>
+    <div className="flex flex-1 min-h-0 flex-col">
+      {updateReadyVersion ? (
+        <div className="shrink-0 flex items-center justify-between gap-4 px-4 py-2 bg-emerald-900/80 border-b border-emerald-700 text-emerald-100 text-sm">
+          <span>Update v{updateReadyVersion} ready</span>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => api?.quitAndInstall()}
+              className="px-3 py-1 rounded bg-emerald-700 hover:bg-emerald-600 text-white font-medium"
+            >
+              Restart to update
+            </button>
+            <button
+              type="button"
+              onClick={() => setUpdateReadyVersion(null)}
+              className="px-3 py-1 rounded bg-slate-600 hover:bg-slate-500 text-slate-200"
+            >
+              Later
+            </button>
+          </div>
         </div>
-        <ProcessList
-          procs={config.procs}
-          selectedProcId={selectedProcId}
-          onSelect={setSelectedProcId}
-          onStart={(id: string) => api?.startProc(id)}
-          onStop={(id: string) => api?.stopProc(id)}
-          onRestart={(id: string) => api?.restartProc(id)}
-        />
-      </aside>
-      <main className="flex-1 flex flex-col min-w-0">
-        <SearchBar
-          query={searchQuery}
-          setQuery={setSearchQuery}
-          mode={searchMode}
-          setMode={setSearchMode}
-          caseSensitive={caseSensitive}
-          setCaseSensitive={setCaseSensitive}
-          filterLines={filterLines}
-          setFilterLines={setFilterLines}
-          matchCount={matches.length}
-          currentMatchIndex={currentMatchIndex}
-          onNext={handleNextMatch}
-          onPrev={handlePrevMatch}
-          onSearch={(q) => runSearch(q)}
-        />
-        <OutputPanel
-          procId={selectedProcId}
-          procName={config.procs.find((p) => p.id === selectedProcId)?.name ?? ""}
-          lines={lines}
-          matches={matches}
-          filteredIndices={filteredIndices}
-          filterLines={filterLines}
-          currentMatchIndex={currentMatchIndex}
-        />
-      </main>
+      ) : null}
+      <div className="flex flex-1 min-h-0">
+        <aside className="w-60 shrink-0 bg-slate-800 border-r border-slate-700 flex flex-col overflow-hidden">
+          <div className="py-3 px-4 font-semibold border-b border-slate-700">oprocs</div>
+          <div className="py-3 px-4 border-b border-slate-700">
+            <button
+              onClick={openConfig}
+              type="button"
+              className="px-4 py-2 border border-slate-600 rounded-md bg-slate-800 text-slate-200 cursor-pointer text-[13px] hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Change config
+            </button>
+          </div>
+          <ProcessList
+            procs={config.procs}
+            selectedProcId={selectedProcId}
+            onSelect={setSelectedProcId}
+            onStart={(id: string) => api?.startProc(id) ?? Promise.resolve()}
+            onStop={(id: string) => api?.stopProc(id) ?? Promise.resolve()}
+            onRestart={(id: string) => api?.restartProc(id) ?? Promise.resolve()}
+          />
+        </aside>
+        <main className="flex-1 flex flex-col min-w-0">
+          <SearchBar
+            query={searchQuery}
+            setQuery={setSearchQuery}
+            mode={searchMode}
+            setMode={setSearchMode}
+            caseSensitive={caseSensitive}
+            setCaseSensitive={setCaseSensitive}
+            filterLines={filterLines}
+            setFilterLines={setFilterLines}
+            matchCount={matches.length}
+            currentMatchIndex={currentMatchIndex}
+            onNext={handleNextMatch}
+            onPrev={handlePrevMatch}
+            onSearch={(q) => runSearch(q)}
+          />
+          <OutputPanel
+            procId={selectedProcId}
+            procName={config.procs.find((p) => p.id === selectedProcId)?.name ?? ""}
+            lines={lines}
+            matches={matches}
+            filteredIndices={filteredIndices}
+            filterLines={filterLines}
+            currentMatchIndex={currentMatchIndex}
+          />
+        </main>
+      </div>
     </div>
   );
 }

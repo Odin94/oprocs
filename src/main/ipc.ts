@@ -2,6 +2,7 @@ import { ipcMain, dialog, BrowserWindow } from "electron";
 import fs from "fs";
 import path from "path";
 import { loadConfig } from "./config.js";
+import { checkForUpdates, quitAndInstall } from "./updater.js";
 import type { ProcessManager } from "./processManager.js";
 
 export const setupIpc = (pm: ProcessManager) => {
@@ -64,4 +65,11 @@ export const setupIpc = (pm: ProcessManager) => {
   ipcMain.handle("start-proc", async (_event, procId: string) => pm.start(procId));
   ipcMain.handle("stop-proc", async (_event, procId: string) => pm.stop(procId));
   ipcMain.handle("restart-proc", async (_event, procId: string) => pm.restart(procId));
+
+  ipcMain.handle("updater-check", () => {
+    checkForUpdates();
+  });
+  ipcMain.handle("updater-quit-and-install", () => {
+    quitAndInstall();
+  });
 };
