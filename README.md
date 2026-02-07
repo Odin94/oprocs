@@ -32,6 +32,10 @@ npm run release:linux
 Same as mprocs: `procs` map with entries that have either `shell` or `cmd`, plus optional `cwd`, `env`, `add_path`, `autostart`, `autorestart`, `stop`. `<CONFIG_DIR>` in paths is replaced with the config file directory.
 
 
+## Credits
+
+* Plant icon: [Growing-plant icons created by Good Ware - Flaticon](https://www.flaticon.com/free-icons/growing-plant)
+
 <!-- TODOdin: -->
 <!-- 
 * automatically add to path on install

@@ -26,7 +26,8 @@
       "package.json"
     ],
     "directories": {
-      "output": "release/${version}"
+      "output": "release/${version}",
+      "buildResources": "assets"
     },
     "publish": {
       "provider": "github",
@@ -34,6 +35,7 @@
       "repo": "oprocs"
     },
     "win": {
+      "icon": "assets/icon.ico",
       "target": [
         {
           "target": "nsis",
@@ -50,12 +52,14 @@
       "allowToChangeInstallationDirectory": true
     },
     "mac": {
+      "icon": "assets/icon.icns",
       "target": [
         "dmg"
       ],
       "artifactName": "${productName}-Mac-${version}.${ext}"
     },
     "linux": {
+      "icon": "assets/icons",
       "target": [
         "AppImage"
       ],
