@@ -50,6 +50,17 @@ app.on("window-all-closed", () => {
     if (process.platform !== "darwin") app.quit()
 })
 
-app.on("before-quit", () => {
-    pm.unregisterAll()
+let isShuttingDown = false
+app.on("before-quit", (e) => {
+    if (isShuttingDown) return
+    e.preventDefault()
+    isShuttingDown = true
+    pm.shutdown().then(() => app.exit(0))
 })
+
+// TODOdin: Consider using prctl on linux exit processes when oprocs is hard killed (consider how that affects the lock file)
+const onSignal = () => {
+    pm.shutdown().then(() => process.exit(0))
+}
+process.on("SIGTERM", onSignal)
+process.on("SIGINT", onSignal)

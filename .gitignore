@@ -8,6 +8,7 @@ Thumbs.db
 .env
 .env.local
 oprocs/
+.oprocs.lock
 plans.md
 
 .env
