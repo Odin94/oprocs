@@ -56,7 +56,7 @@ export const setupIpc = (pm: ProcessManager) => {
                 const pidStr = list.length === 1 ? `pid ${list[0]}` : `pids ${list.join(", ")}`
                 event.sender.send("process-output", {
                     procId,
-                    text: `${red}[Killed previous processes (${pidStr}) before starting.]${reset}\n`,
+                    text: `${red}[Killed previous processes from .oprocs.lock (${pidStr}) before starting - this happens if oprocs crashes or is force killed.]${reset}\n`,
                     isStderr: false,
                 })
             }
