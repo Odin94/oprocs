@@ -2,7 +2,7 @@ import { withoutAnsiColors } from "./ansi"
 
 export const getOpenUrl = (text: string) => {
     const normalized = withoutAnsiColors(text)
-    return matchViteReact(normalized) ?? matchFastify(normalized)
+    return matchViteReact(normalized) ?? matchFastify(normalized) ?? matchDrizzleStudio(normalized)
 }
 
 const matchViteReact = (text: string) => {
@@ -13,6 +13,12 @@ const matchViteReact = (text: string) => {
 
 const matchFastify = (text: string) => {
     const regex = /Server listening (?:at|on) (https?:\/\/[^\s]+)/
+    const match = regex.exec(text)
+    return match ? match[1] : undefined
+}
+
+const matchDrizzleStudio = (text: string) => {
+    const regex = /Drizzle Studio is up and running on (https?:\/\/[^\s]+)/
     const match = regex.exec(text)
     return match ? match[1] : undefined
 }
