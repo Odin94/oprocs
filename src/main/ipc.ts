@@ -50,10 +50,13 @@ export const setupIpc = (pm: ProcessManager) => {
         if (lock) {
             const red = "\x1b[31m"
             const reset = "\x1b[0m"
-            for (const [procId, pid] of Object.entries(lock)) {
+            for (const [procId, pids] of Object.entries(lock)) {
+                const list = Array.isArray(pids) ? pids : [pids]
+                if (list.length === 0) continue
+                const pidStr = list.length === 1 ? `pid ${list[0]}` : `pids ${list.join(", ")}`
                 event.sender.send("process-output", {
                     procId,
-                    text: `${red}[Killed previous process (pid ${pid}) before starting.]${reset}\n`,
+                    text: `${red}[Killed previous processes (${pidStr}) before starting.]${reset}\n`,
                     isStderr: false,
                 })
             }

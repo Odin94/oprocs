@@ -1,4 +1,7 @@
-import { spawn, execSync, type ChildProcess } from "child_process"
+import { spawn, spawnSync, exec, execSync, type ChildProcess } from "child_process"
+import { promisify } from "util"
+
+const execAsync = promisify(exec)
 import fs from "fs"
 import path from "path"
 import treeKill from "tree-kill"
@@ -27,6 +30,7 @@ type ProcState = {
     startTime: number
     userRequestedStop?: boolean
     effectivePid?: number
+    pidsForLock?: number[]
 }
 
 export type ProcessManagerEvents = {
@@ -81,59 +85,98 @@ export class ProcessManager {
         }
     }
 
-    async killPidsFromLock(lock: Record<string, number> | null): Promise<void> {
+    async killPidsFromLock(lock: Record<string, number[] | number> | null): Promise<void> {
         if (!lock || typeof lock !== "object") return
-        const pids = Object.entries(lock).filter(
-            (entry): entry is [string, number] => typeof entry[1] === "number" && Number.isInteger(entry[1])
-        )
-        lockLog("killPidsFromLock: platform=%s attempting to kill %s process(es)", process.platform, pids.length)
+        const allPids = new Set<number>()
+        for (const v of Object.values(lock)) {
+            if (typeof v === "number" && Number.isInteger(v)) allPids.add(v)
+            else if (Array.isArray(v))
+                v.filter((p): p is number => typeof p === "number" && Number.isInteger(p)).forEach((p) => allPids.add(p))
+        }
+        lockLog("killPidsFromLock: platform=%s attempting to kill %s pid(s)", process.platform, allPids.size)
         await Promise.all(
-            pids.map(([procId, pid]) => {
-                lockLog("killPidsFromLock: killing procId=%s pid=%s", procId, pid)
+            [...allPids].map((pid) => {
+                lockLog("killPidsFromLock: killing pid=%s", pid)
                 return this.killPid(pid)
-            })
+            }),
         )
     }
 
-    private getChildPidsWindows(parentPid: number): { pid: number; name: string }[] {
+    private parseChildPidsOutput(trimmed: string): { pid: number; name: string }[] {
+        if (!trimmed || trimmed === "null") return []
+        const parsed = JSON.parse(trimmed) as unknown
+        const one = (p: unknown): { pid: number; name: string } | null => {
+            if (p == null || typeof p !== "object") return null
+            const o = p as Record<string, unknown>
+            const pid = (o.ProcessId ?? o.processId) as number | undefined
+            const name = (o.Name ?? o.name) as string | undefined
+            if (typeof pid !== "number" || !Number.isInteger(pid)) return null
+            return { pid, name: typeof name === "string" ? name : "" }
+        }
+        if (Array.isArray(parsed)) {
+            return parsed.map(one).filter((x): x is { pid: number; name: string } => x != null)
+        }
+        const single = one(parsed)
+        return single ? [single] : []
+    }
+
+    private async getChildPidsWindowsAsync(parentPid: number): Promise<{ pid: number; name: string }[]> {
         try {
-            const output = execSync(
+            const { stdout } = await execAsync(
                 `powershell "Get-CimInstance Win32_Process -Filter 'ParentProcessId = ${parentPid}' | Select-Object ProcessId, Name | ConvertTo-Json -Compress"`,
-                { encoding: "utf-8", timeout: 5000 }
+                { encoding: "utf-8", timeout: 5000 },
             )
-            const trimmed = output.toString().trim()
-            if (!trimmed || trimmed === "null") return []
-            const parsed = JSON.parse(trimmed) as unknown
-            const one = (p: unknown): { pid: number; name: string } | null => {
-                if (p == null || typeof p !== "object") return null
-                const o = p as Record<string, unknown>
-                const pid = (o.ProcessId ?? o.processId) as number | undefined
-                const name = (o.Name ?? o.name) as string | undefined
-                if (typeof pid !== "number" || !Number.isInteger(pid)) return null
-                return { pid, name: typeof name === "string" ? name : "" }
-            }
-            if (Array.isArray(parsed)) {
-                return parsed.map(one).filter((x): x is { pid: number; name: string } => x != null)
-            }
-            const single = one(parsed)
-            return single ? [single] : []
+            return this.parseChildPidsOutput((stdout as string).trim())
         } catch {
             return []
         }
     }
 
-    private findDescendantPidWindows(rootPid: number): number | null {
-        const children = this.getChildPidsWindows(rootPid)
+    private isShellProcessName(name: string): boolean {
+        const n = name.toLowerCase()
+        return n === "cmd.exe" || n === "command.com" || n === "powershell.exe" || n === "pwsh.exe"
+    }
+
+    private async collectDescendantsWindowsAsync(rootPid: number): Promise<{ pid: number; name: string; depth: number }[]> {
+        const out: { pid: number; name: string; depth: number }[] = []
+        const walk = async (pid: number, depth: number) => {
+            const children = await this.getChildPidsWindowsAsync(pid)
+            for (const c of children) {
+                out.push({ pid: c.pid, name: c.name ?? "", depth })
+                await walk(c.pid, depth + 1)
+            }
+        }
+        await walk(rootPid, 0)
+        return out
+    }
+
+    private async logDescendantTreeWindowsAsync(procId: string, rootPid: number) {
+        const children = await this.getChildPidsWindowsAsync(rootPid)
+        lockLog(
+            "start: %s shell pid=%s has %s direct child(ren): %s",
+            procId,
+            rootPid,
+            children.length,
+            children.map((c) => `pid=${c.pid} name=${c.name ?? "?"}`).join(", ") || "none",
+        )
+        const all = await this.collectDescendantsWindowsAsync(rootPid)
+        if (all.length > 0) {
+            lockLog(
+                "start: %s all descendants of pid=%s: %s",
+                procId,
+                rootPid,
+                all.map((d) => `pid=${d.pid} name=${d.name} depth=${d.depth}`).join("; "),
+            )
+        }
+    }
+
+    private async findDescendantPidWindowsAsync(rootPid: number): Promise<number | null> {
+        const children = await this.getChildPidsWindowsAsync(rootPid)
         if (children.length === 0) return null
-        for (const c of children) {
-            const name = (c.name ?? "").toLowerCase()
-            if (name === "node.exe" || name === "node") return c.pid
-        }
-        for (const c of children) {
-            const found = this.findDescendantPidWindows(c.pid)
-            if (found != null) return found
-        }
-        return children[0].pid
+        const nonShell = children.find((c) => !this.isShellProcessName(c.name ?? ""))
+        if (nonShell) return nonShell.pid
+        const results = await Promise.all(children.map((c) => this.findDescendantPidWindowsAsync(c.pid)))
+        return results.find((p) => p != null) ?? null
     }
 
     private killPid(pid: number, signal: string = "SIGTERM"): Promise<void> {
@@ -142,8 +185,7 @@ export class ProcessManager {
             treeKill(pid, signal, (err) => {
                 if (err) {
                     const notFound =
-                        err.message?.toLowerCase().includes("not found") ||
-                        err.message?.toLowerCase().includes("no such process")
+                        err.message?.toLowerCase().includes("not found") || err.message?.toLowerCase().includes("no such process")
                     if (notFound) {
                         lockLog("killPid: pid=%s already gone", pid)
                     } else {
@@ -155,7 +197,7 @@ export class ProcessManager {
         })
     }
 
-    readLock(): Record<string, number> | null {
+    readLock(): Record<string, number[]> | null {
         const lockPath = this.getLockPath()
         lockLog("readLock: path=%s exists=%s", lockPath, fs.existsSync(lockPath))
         if (!fs.existsSync(lockPath)) return null
@@ -166,9 +208,10 @@ export class ProcessManager {
                 lockLog("readLock: invalid shape, returning null")
                 return null
             }
-            const out: Record<string, number> = {}
+            const out: Record<string, number[]> = {}
             for (const [k, v] of Object.entries(data)) {
-                if (typeof v === "number" && Number.isInteger(v)) out[k] = v
+                if (typeof v === "number" && Number.isInteger(v)) out[k] = [v]
+                else if (Array.isArray(v)) out[k] = v.filter((p): p is number => typeof p === "number" && Number.isInteger(p))
             }
             lockLog("readLock: parsed pids", JSON.stringify(out))
             return out
@@ -179,14 +222,13 @@ export class ProcessManager {
     }
 
     persistLock() {
-        const running: Record<string, number> = {}
+        const running: Record<string, number[]> = {}
         for (const [procId, state] of this.procs.entries()) {
-            const pid = state.effectivePid ?? state.proc?.pid
-            if (pid == null) continue
             if (state.proc == null) continue
-            if (isSpawnedHandle(state.proc) || this.isPidAlive(pid)) {
-                running[procId] = pid
-            }
+            const rootPid = state.proc.pid
+            if (rootPid == null) continue
+            const alive = isSpawnedHandle(state.proc) || this.isPidAlive(rootPid)
+            if (alive) running[procId] = state.pidsForLock ?? [rootPid]
         }
         const lockPath = this.getLockPath()
         try {
@@ -196,7 +238,7 @@ export class ProcessManager {
                     lockLog("persistLock: removed %s", lockPath)
                 }
             } else {
-                lockLog("persistLock: path=%s content=%s", lockPath, JSON.stringify(running))
+                lockLog(`persistLock: path=${lockPath} content=${JSON.stringify(running)}`)
                 fs.writeFileSync(lockPath, JSON.stringify(running, null, 0), "utf-8")
             }
         } catch (err) {
@@ -266,8 +308,7 @@ export class ProcessManager {
             if (config.shell != null) {
                 const shell = process.platform === "win32" ? (process.env.ComSpec ?? "cmd.exe") : "/bin/sh"
                 const flag = process.platform === "win32" ? "/c" : "-c"
-                const shellCmd =
-                    process.platform === "win32" ? config.shell : "exec " + config.shell
+                const shellCmd = process.platform === "win32" ? config.shell : "exec " + config.shell
                 const spawnOpts: Parameters<typeof spawn>[2] = {
                     cwd,
                     env,
@@ -311,20 +352,33 @@ export class ProcessManager {
             process.platform === "win32" &&
             child.pid != null &&
             (config.shell != null ||
-                (config.cmd?.length &&
-                    (config.cmd[0] === "cmd" || String(config.cmd[0]).toLowerCase().endsWith("cmd.exe"))))
+                (config.cmd?.length && (config.cmd[0] === "cmd" || String(config.cmd[0]).toLowerCase().endsWith("cmd.exe"))))
         if (isWindowsCmd) {
             const rootPid = child.pid!
-            const tryResolve = () => {
-                if (state.proc !== child || state.effectivePid != null) return
-                const descendantPid = this.findDescendantPidWindows(rootPid)
-                if (descendantPid != null) {
-                    state.effectivePid = descendantPid
-                    lockLog("start: %s resolved effectivePid=%s (descendant of pid=%s)", procId, descendantPid, rootPid)
+
+            // Asynchronously getting the descendant pids because we need all of these to correctly
+            // kill the process from the lockfile (only required if we had a hard crash/kill and restart oprocs)
+            // this can take a while, so if we hard crash too early we may leave processes orphaned even on restart
+            const tryResolve = async () => {
+                if (state.proc !== child || state.pidsForLock != null) return
+                await this.logDescendantTreeWindowsAsync(procId, rootPid)
+                if (state.proc !== child || state.pidsForLock != null) return
+                const descendants = await this.collectDescendantsWindowsAsync(rootPid)
+                if (state.proc !== child || state.pidsForLock != null) return
+                const pids = [rootPid, ...descendants.map((d) => d.pid)]
+                if (pids.length > 0) {
+                    state.pidsForLock = pids
+                    const nonShell = await this.findDescendantPidWindowsAsync(rootPid)
+                    if (nonShell != null) state.effectivePid = nonShell
+                    lockLog(`start: ${procId} pidsForLock=${JSON.stringify(pids)}`)
                     this.persistLock()
                 }
             }
-            ;[400, 900, 1400].forEach((ms) => setTimeout(tryResolve, ms))
+            ;[400, 900, 1400].forEach((ms) =>
+                setTimeout(() => {
+                    tryResolve().catch((err) => lockLog(`start: ${procId} resolve failed`, err))
+                }, ms),
+            )
         }
 
         const push = (text: string, isStderr: boolean) => {
@@ -385,20 +439,31 @@ export class ProcessManager {
         const handle = state.proc
         if (!handle) return { ok: true }
 
+        this.appendSystemLine(procId, "[oprocs] stopped")
         state.userRequestedStop = true
-        const pid = state.effectivePid ?? handle.pid
-        if (pid == null) {
+        const rootPid = handle.pid
+        if (rootPid == null) {
             if (!options?.skipPersistLock) this.persistLock()
             return { ok: true }
         }
 
         const stop = state.config.stop ?? "SIGTERM"
         const signal = stop === "hard-kill" ? "SIGKILL" : stop
-        treeKill(pid, signal, () => {})
+        if (process.platform === "win32") {
+            const taskkillExe = path.join(process.env.SystemRoot ?? "C:\\Windows", "System32", "taskkill.exe")
+            spawnSync(taskkillExe, ["/pid", String(rootPid), "/T", "/F"], { stdio: "ignore", windowsHide: true, timeout: 5000 })
+        } else {
+            try {
+                process.kill(rootPid, signal as NodeJS.Signals)
+            } catch {
+                // process may already be gone
+            }
+        }
 
         if (!isSpawnedHandle(handle)) {
             state.proc = null
             state.effectivePid = undefined
+            state.pidsForLock = undefined
             this.listeners.stopped({ procId, code: null })
         }
         if (!options?.skipPersistLock) this.persistLock()
@@ -407,6 +472,7 @@ export class ProcessManager {
 
     restart(procId: string): Promise<{ ok: boolean; error?: string }> {
         this.stop(procId)
+        this.appendSystemLine(procId, "[oprocs] restarted")
         return new Promise((resolve) => {
             setTimeout(() => resolve(this.start(procId)), 300)
         })
@@ -415,6 +481,27 @@ export class ProcessManager {
     getLines(procId: string): string[] {
         const state = this.procs.get(procId)
         return state ? [...state.lines, ...(state.buffer ? [state.buffer] : [])] : []
+    }
+
+    private appendSystemLine(procId: string, text: string) {
+        const state = this.procs.get(procId)
+        if (!state) return
+        const line = text.endsWith("\n") ? text : text + "\n"
+        state.lines.push(line.trimEnd())
+        if (state.lines.length > MAX_LINES) state.lines.shift()
+        if (state.logStream) {
+            state.logStream.write(line)
+        } else {
+            try {
+                const logDir = path.join(state.configDir, "oprocs")
+                fs.mkdirSync(logDir, { recursive: true })
+                const logPath = path.join(logDir, `${sanitizeProcName(procId)}.log`)
+                fs.appendFileSync(logPath, line, "utf-8")
+            } catch {
+                // ignore
+            }
+        }
+        this.listeners.output({ procId, text: line, isStderr: false })
     }
 
     clear(procId: string) {
@@ -438,6 +525,7 @@ export class ProcessManager {
         if (this.isPidAlive(pid)) return true
         state.proc = null
         state.effectivePid = undefined
+        state.pidsForLock = undefined
         this.persistLock()
         this.listeners.stopped({ procId, code: null })
         return false
@@ -478,7 +566,16 @@ export class ProcessManager {
             this.stop(procId)
         }
         return Promise.all(running.map(([, handle]) => waitForClose(handle))).then(() => {
+            const lockPath = this.getLockPath()
             this.procs.clear()
+            if (fs.existsSync(lockPath)) {
+                try {
+                    fs.unlinkSync(lockPath)
+                    lockLog("shutdown: removed lock file %s", lockPath)
+                } catch (err) {
+                    lockLog("shutdown: failed to remove lock file %s", err)
+                }
+            }
         })
     }
 }
