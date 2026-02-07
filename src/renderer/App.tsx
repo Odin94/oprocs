@@ -139,14 +139,15 @@ export default function App() {
         ipcListenersRegistered.current = true
         api.onProcessOutput(({ procId, text }) => {
             const openUrl = getOpenUrl(text)
-            // TODOdin: Add a helper to make updatng config.procs prettier
             if (openUrl)
                 setConfig((c) =>
                     c
                         ? {
-                              ...c,
-                              procs: c.procs.map((p) => (p.id === procId ? { ...p, openUrl } : p)),
-                          }
+                            ...c,
+                            procs: c.procs.map((p) =>
+                                p.id === procId && p.openUrl == null ? { ...p, openUrl } : p,
+                            ),
+                        }
                         : c,
                 )
             setOutputByProc((prev) => ({ ...prev, [procId]: (prev[procId] ?? "") + text }))
@@ -155,9 +156,13 @@ export default function App() {
             setConfig((c) =>
                 c
                     ? {
-                          ...c,
-                          procs: c.procs.map((p) => (p.id === procId ? { ...p, status: "running" as const, exitCode: null } : p)),
-                      }
+                        ...c,
+                        procs: c.procs.map((p) =>
+                            p.id === procId
+                                ? { ...p, status: "running" as const, exitCode: null, openUrl: undefined }
+                                : p,
+                        ),
+                    }
                     : c,
             )
         })
@@ -165,9 +170,13 @@ export default function App() {
             setConfig((c) =>
                 c
                     ? {
-                          ...c,
-                          procs: c.procs.map((p) => (p.id === procId ? { ...p, status: "stopped" as const, exitCode: code } : p)),
-                      }
+                        ...c,
+                        procs: c.procs.map((p) =>
+                            p.id === procId
+                                ? { ...p, status: "stopped" as const, exitCode: code, openUrl: undefined }
+                                : p,
+                        ),
+                    }
                     : c,
             )
         })

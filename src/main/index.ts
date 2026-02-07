@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from "electron"
+import { app, BrowserWindow, Menu } from "electron"
 import path from "path"
 import { ProcessManager } from "./processManager.js"
 import { setupIpc } from "./ipc.js"
@@ -31,6 +31,7 @@ const createWindow = () => {
 }
 
 app.whenReady().then(() => {
+    Menu.setApplicationMenu(null)
     createWindow()
     if (app.isPackaged) setupUpdater()
 
