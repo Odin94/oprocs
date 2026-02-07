@@ -4,8 +4,7 @@ import path from "path"
 import { loadConfig } from "./config.js"
 import { checkForUpdates, quitAndInstall } from "./updater.js"
 import type { ProcessManager } from "./processManager.js"
-
-const lockLog = (msg: string, ...args: unknown[]) => console.log("[oprocs lock]", msg, ...args)
+import { log } from "./logger.js"
 
 export const setupIpc = (pm: ProcessManager) => {
     let currentConfigPath: string | null = null
@@ -41,10 +40,10 @@ export const setupIpc = (pm: ProcessManager) => {
 
         currentConfigPath = resolved
         currentConfigDir = loaded.configDir
-        lockLog("load-config: configDir=%s", loaded.configDir)
+        log.debug("load-config: configDir=%s", loaded.configDir)
         pm.setConfigDir(loaded.configDir)
         const lock = pm.readLock()
-        lockLog("load-config: lock file result: %s", lock == null ? "null" : JSON.stringify(lock))
+        log.debug("load-config: lock file result: %s", lock == null ? "null" : JSON.stringify(lock))
         await pm.killPidsFromLock(lock)
         await new Promise((r) => setTimeout(r, 300))
         if (lock) {
@@ -74,12 +73,12 @@ export const setupIpc = (pm: ProcessManager) => {
         }
         for (const { id, autostart } of procs) {
             if (!autostart) {
-                lockLog("load-config: %s autostart=false, skipping", id)
+                log.debug("load-config: %s autostart=false, skipping", id)
                 continue
             }
-            lockLog("load-config: %s starting new process", id)
+            log.debug("load-config: %s starting new process", id)
             const result = pm.start(id)
-            if (!result.ok) lockLog("load-config: %s start failed: %s", id, result.error)
+            if (!result.ok) log.debug("load-config: %s start failed: %s", id, result.error)
         }
         pm.persistLock()
 
