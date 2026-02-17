@@ -11,8 +11,14 @@ export const setupIpc = (pm: ProcessManager) => {
     let currentConfigDir: string | null = null
 
     ipcMain.handle("get-default-config-path", async () => {
-        const candidate = path.join(process.cwd(), "mprocs.yaml")
-        return fs.existsSync(candidate) ? candidate : null
+        const possibleFileNames = ["oprocs.yaml", "oprocs.yml", "mprocs.yaml", "mprocs.yml"]
+
+        for (const fileName of possibleFileNames) {
+            const filePath = path.join(process.cwd(), fileName)
+            if (fs.existsSync(filePath)) return filePath
+        }
+
+        return null
     })
 
     ipcMain.handle("load-config", async (event, configPath: string) => {
