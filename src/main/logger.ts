@@ -11,15 +11,10 @@ const otelProvider = new LoggerProvider({
     processors: [new SimpleLogRecordProcessor(otelExporter)],
 })
 logs.setGlobalLoggerProvider(otelProvider)
-const otelLogger = logs.getLogger("oprocs", "0.1.0")
+const otelLogger = logs.getLogger("oprocs", "0.1.1")
 
-const stream = isDev
-    ? pinoPretty({ colorize: true, translateTime: "SYS:HH:MM:ss", hideObject: true })
-    : pino.destination(1)
-const pinoLogger = pino(
-    { level: isDev ? "debug" : "info", base: { name: "oprocs" } },
-    stream,
-)
+const stream = isDev ? pinoPretty({ colorize: true, translateTime: "SYS:HH:MM:ss", hideObject: true }) : pino.destination(1)
+const pinoLogger = pino({ level: isDev ? "debug" : "info", base: { name: "oprocs" } }, stream)
 const lockLogger = pinoLogger.child({ module: "lock" })
 
 const formatMsg = (msg: string, ...args: unknown[]) => {
@@ -27,7 +22,9 @@ const formatMsg = (msg: string, ...args: unknown[]) => {
     let i = 0
     const formatted = msg.replace(/%s/g, () => String(args[i++]))
     const rest = args.slice(i)
-    return rest.length > 0 ? formatted + " " + rest.map((a) => (typeof a === "object" ? JSON.stringify(a) : String(a))).join(" ") : formatted
+    return rest.length > 0
+        ? formatted + " " + rest.map((a) => (typeof a === "object" ? JSON.stringify(a) : String(a))).join(" ")
+        : formatted
 }
 
 export const log = {

@@ -16,9 +16,16 @@ type SearchBarProps = {
   onNext: () => void;
   onPrev: () => void;
   onSearch: (q: string) => void;
+  hasOutput: boolean;
+  onClearOutput: () => void;
+  canUndoClear: boolean;
+  onUndoClear: () => void;
 };
 
 const DEBOUNCE_MS = 200;
+
+const barButtonCls =
+  "px-4 py-2 border border-slate-600 rounded-md bg-slate-800 text-slate-200 cursor-pointer text-[13px] hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed";
 
 export const SearchBar = ({
   query,
@@ -34,6 +41,10 @@ export const SearchBar = ({
   onNext,
   onPrev,
   onSearch,
+  hasOutput,
+  onClearOutput,
+  canUndoClear,
+  onUndoClear,
 }: SearchBarProps) => {
   const [localQuery, setLocalQuery] = useState(query);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -101,7 +112,7 @@ export const SearchBar = ({
       ) : null}
       <button
         type="button"
-        className="px-4 py-2 border border-slate-600 rounded-md bg-slate-800 text-slate-200 cursor-pointer text-[13px] hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
+        className={barButtonCls}
         onClick={onPrev}
         disabled={matchCount === 0}
       >
@@ -109,12 +120,29 @@ export const SearchBar = ({
       </button>
       <button
         type="button"
-        className="px-4 py-2 border border-slate-600 rounded-md bg-slate-800 text-slate-200 cursor-pointer text-[13px] hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
+        className={barButtonCls}
         onClick={onNext}
         disabled={matchCount === 0}
       >
         Next
       </button>
+      <button
+        type="button"
+        className={barButtonCls}
+        onClick={onClearOutput}
+        disabled={!hasOutput}
+      >
+        Clear output
+      </button>
+      {canUndoClear ? (
+        <button
+          type="button"
+          className={barButtonCls}
+          onClick={onUndoClear}
+        >
+          Undo clear
+        </button>
+      ) : null}
     </div>
   );
 };

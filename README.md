@@ -27,6 +27,8 @@ npm run release:mac
 npm run release:linux
 ```
 
+Note that this only creates draft-releases on github that must be manually published.
+
 ## Config format
 
 Same as mprocs: `procs` map with entries that have either `shell` or `cmd`, plus optional `cwd`, `env`, `add_path`, `autostart`, `autorestart`, `stop`. `<CONFIG_DIR>` in paths is replaced with the config file directory.

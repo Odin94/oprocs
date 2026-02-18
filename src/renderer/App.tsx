@@ -60,6 +60,7 @@ export default function App() {
     const [filteredIndices, setFilteredIndices] = useState<number[]>([])
     const [currentMatchIndex, setCurrentMatchIndex] = useState(0)
     const [updateReadyVersion, setUpdateReadyVersion] = useState<string | null>(null)
+    const [clearedOutputSnapshot, setClearedOutputSnapshot] = useState<{ procId: string; content: string } | null>(null)
     const searchIdRef = useRef(0)
     const workerRef = useRef<Worker | null>(null)
 
@@ -111,6 +112,26 @@ export default function App() {
     const handlePrevMatch = useCallback(() => {
         setCurrentMatchIndex((i) => (i <= 0 ? Math.max(0, matches.length - 1) : i - 1))
     }, [matches.length])
+
+    useEffect(() => {
+        setClearedOutputSnapshot(null)
+    }, [selectedProcId])
+
+    const clearOutputForCurrentProc = useCallback(() => {
+        if (!selectedProcId) return
+        const current = outputByProc[selectedProcId] ?? ""
+        setClearedOutputSnapshot({ procId: selectedProcId, content: current })
+        setOutputByProc((prev) => ({ ...prev, [selectedProcId]: "" }))
+    }, [selectedProcId, outputByProc])
+
+    const undoClearOutput = useCallback(() => {
+        if (!clearedOutputSnapshot || clearedOutputSnapshot.procId !== selectedProcId) return
+        setOutputByProc((prev) => {
+            const current = prev[clearedOutputSnapshot.procId] ?? ""
+            return { ...prev, [clearedOutputSnapshot.procId]: clearedOutputSnapshot.content + current }
+        })
+        setClearedOutputSnapshot(null)
+    }, [clearedOutputSnapshot, selectedProcId])
 
     useEffect(() => {
         if (!api || config !== null) return
@@ -277,6 +298,10 @@ export default function App() {
                         onNext={handleNextMatch}
                         onPrev={handlePrevMatch}
                         onSearch={(q) => runSearch(q)}
+                        hasOutput={!!selectedProcId && !!(outputByProc[selectedProcId] ?? "").trim()}
+                        onClearOutput={clearOutputForCurrentProc}
+                        canUndoClear={clearedOutputSnapshot !== null && clearedOutputSnapshot.procId === selectedProcId}
+                        onUndoClear={undoClearOutput}
                     />
                     <OutputPanel
                         procId={selectedProcId}
