@@ -49,7 +49,8 @@
     "nsis": {
       "oneClick": false,
       "perMachine": false,
-      "allowToChangeInstallationDirectory": true
+      "allowToChangeInstallationDirectory": true,
+      "include": "build/nsis-allowOnlyOneInstallerInstance.nsh"
     },
     "mac": {
       "icon": "assets/icon.icns",
