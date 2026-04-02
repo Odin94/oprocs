@@ -19,15 +19,9 @@ npm run build:mac
 npm run build:linux
 ```
 
-Built installers go to `release/<version>/`. The app auto-updates from [GitHub Releases](https://github.com/Odin94/oprocs/releases). To build and publish in one step, copy `.env.sample` to `.env`, set `GH_TOKEN` to a GitHub personal access token (with `repo` scope), then run:
+Built installers go to `release/<version>/`. The app auto-updates from [GitHub Releases](https://github.com/Odin94/oprocs/releases).
 
-```bash
-npm run release:win
-npm run release:mac
-npm run release:linux
-```
-
-Note that this only creates draft-releases on github that must be manually published.
+For publishing a release, see [RELEASING.md](./RELEASING.md).
 
 ## Config format
 

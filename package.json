@@ -17,6 +17,9 @@
     "release:win": "electron-vite build && dotenv -e .env -- electron-builder build --win -p always",
     "release:mac": "electron-vite build && dotenv -e .env -- electron-builder build --mac -p always",
     "release:linux": "electron-vite build && dotenv -e .env -- electron-builder build --linux -p always",
+    "version:patch": "npm version patch",
+    "version:minor": "npm version minor",
+    "version:major": "npm version major",
     "preview": "electron-vite preview"
   },
   "build": {
@@ -33,7 +36,8 @@
     "publish": {
       "provider": "github",
       "owner": "Odin94",
-      "repo": "oprocs"
+      "repo": "oprocs",
+      "releaseType": "release"
     },
     "win": {
       "icon": "assets/icon.ico",
