@@ -1,9 +1,9 @@
-import { useCallback, useRef, useEffect } from "react"
+import React, { useCallback, useRef, useEffect, useMemo, useState } from "react"
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso"
-import { parseAnsiToSegments } from "./utils/ansi"
+import { parseAnsiToSegments, withoutAnsiColors } from "./utils/ansi"
 
-const MAX_LINES = 10_000
 const LINE_HEIGHT = 20
+const CHAR_WIDTH = 7.8 // approximate px per char at 13px monospace
 
 export type Match = { lineIndex: number; start: number; end: number }
 
@@ -18,8 +18,22 @@ type OutputPanelProps = {
     onScrollToMatch?: (lineIndex: number) => void
 }
 
+// Defined outside the component so Virtuoso gets stable component references.
+const HScrollScroller = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
+    ({ style, ...props }, ref) => <div ref={ref} style={{ ...style, overflowX: "auto" }} {...props} />,
+)
+
+const MinWidthList = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement> & { context?: { minWidth: number } }>(
+    ({ style, context, ...props }, ref) => (
+        <div ref={ref} style={{ ...style, minWidth: context?.minWidth }} {...props} />
+    ),
+)
+
+const hScrollComponents = { Scroller: HScrollScroller, List: MinWidthList }
+
 export const OutputPanel = ({ procId, procName, lines, matches, filteredIndices, filterLines, currentMatchIndex }: OutputPanelProps) => {
     const virtuosoRef = useRef<VirtuosoHandle>(null)
+    const [wrapLines, setWrapLines] = useState(false)
     const currentMatch = matches[currentMatchIndex] ?? null
 
     const displayLength = filterLines ? filteredIndices.length : lines.length
@@ -27,6 +41,17 @@ export const OutputPanel = ({ procId, procName, lines, matches, filteredIndices,
         (displayIndex: number) => (filterLines ? filteredIndices[displayIndex] : displayIndex),
         [filterLines, filteredIndices],
     )
+
+    // Reset wrap state when switching processes
+    useEffect(() => {
+        setWrapLines(false)
+    }, [procId])
+
+    const maxLineWidth = useMemo(() => {
+        if (wrapLines) return 0
+        const maxChars = lines.reduce((max, l) => Math.max(max, withoutAnsiColors(l).length), 0)
+        return maxChars * CHAR_WIDTH + 8 // 8 = paddingLeft
+    }, [lines, wrapLines])
 
     const scrollToLine = useCallback(
         (lineIndex: number) => {
@@ -70,14 +95,12 @@ export const OutputPanel = ({ procId, procName, lines, matches, filteredIndices,
         return (
             <div
                 style={{
-                    height: LINE_HEIGHT,
+                    ...(wrapLines ? { minHeight: LINE_HEIGHT } : { height: LINE_HEIGHT }),
                     lineHeight: `${LINE_HEIGHT}px`,
                     paddingLeft: 4,
                     fontFamily: "ui-monospace, monospace",
                     fontSize: 13,
-                    whiteSpace: "pre",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
+                    whiteSpace: wrapLines ? "pre-wrap" : "pre",
                 }}
             >
                 {renderLineWithAnsiAndHighlights(rawLine, lineMatches, currentMatch, isCurrentLine)}
@@ -89,19 +112,44 @@ export const OutputPanel = ({ procId, procName, lines, matches, filteredIndices,
         <div className="flex flex-col flex-1 min-w-0 min-h-0">
             <div className="py-2 px-4 border-b border-slate-700 flex gap-2 flex-wrap items-center">
                 <span className="self-center mr-2">{procName}</span>
+                <button
+                    type="button"
+                    onClick={() => setWrapLines((w) => !w)}
+                    className={`px-2 py-0.5 text-xs rounded border ${
+                        wrapLines
+                            ? "bg-slate-600 border-slate-500 text-slate-200"
+                            : "border-slate-600 text-slate-400 hover:text-slate-200"
+                    }`}
+                >
+                    Wrap
+                </button>
             </div>
             {displayLength === 0 ? (
                 <div className="flex-1 overflow-auto py-3 px-4 font-mono text-[13px] text-slate-500">No output yet.</div>
             ) : (
                 <div className="flex-1 min-h-0 p-0">
-                    <Virtuoso
-                        ref={virtuosoRef}
-                        style={{ height: "100%" }}
-                        totalCount={displayLength}
-                        itemContent={itemContent}
-                        fixedItemHeight={LINE_HEIGHT}
-                        followOutput="smooth"
-                    />
+                    {wrapLines ? (
+                        <Virtuoso
+                            key="wrap"
+                            ref={virtuosoRef}
+                            style={{ height: "100%" }}
+                            totalCount={displayLength}
+                            itemContent={itemContent}
+                            followOutput="smooth"
+                        />
+                    ) : (
+                        <Virtuoso
+                            key="nowrap"
+                            ref={virtuosoRef}
+                            style={{ height: "100%" }}
+                            totalCount={displayLength}
+                            itemContent={itemContent}
+                            fixedItemHeight={LINE_HEIGHT}
+                            followOutput="smooth"
+                            components={hScrollComponents}
+                            context={{ minWidth: maxLineWidth }}
+                        />
+                    )}
                 </div>
             )}
         </div>
