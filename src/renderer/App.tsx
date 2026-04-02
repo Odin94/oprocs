@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react"
+import { toast } from "sonner"
 import { ProcessList } from "./ProcessList"
 import { OutputPanel, type Match } from "./OutputPanel"
 import { SearchBar, type SearchMode } from "./SearchBar"
@@ -27,7 +28,8 @@ declare global {
             loadConfig: (
                 configPath: string,
             ) => Promise<
-                { configPath: string; configDir: string; procs: { id: string; name: string }[]; runningIds?: string[] } | { error: string }
+                | { configPath: string; configDir: string; procs: { id: string; name: string }[]; runningIds?: string[]; normalizedProcNames?: string[] }
+                | { error: string }
             >
             startProc: (procId: string) => Promise<{ ok: boolean; error?: string }>
             stopProc: (procId: string) => Promise<{ ok: boolean; error?: string }>
@@ -133,26 +135,39 @@ export default function App() {
         setClearedOutputSnapshot(null)
     }, [clearedOutputSnapshot, selectedProcId])
 
+    const applyLoadedConfig = useCallback(
+        (result: { configPath: string; configDir: string; procs: { id: string; name: string }[]; runningIds?: string[]; normalizedProcNames?: string[] }) => {
+            const runningSet = new Set(result.runningIds ?? [])
+            setConfig({
+                configPath: result.configPath,
+                configDir: result.configDir,
+                procs: result.procs.map((p) => ({
+                    ...p,
+                    status: runningSet.has(p.id) ? ("running" as const) : ("stopped" as const),
+                    exitCode: null,
+                })),
+            })
+            setSelectedProcId(result.procs[0]?.id ?? null)
+            if (result.normalizedProcNames && result.normalizedProcNames.length > 0) {
+                toast.warning("Windows commands rewritten for Unix", {
+                    description: `cmd /c in ${result.normalizedProcNames.join(", ")} replaced with sh -c. Use --no-cmd-rewrite to disable.`,
+                    duration: 6000,
+                })
+            }
+        },
+        [],
+    )
+
     useEffect(() => {
         if (!api || config !== null) return
         api.getDefaultConfigPath().then((defaultPath) => {
             if (!defaultPath) return
             api.loadConfig(defaultPath).then((result) => {
                 if ("error" in result) return
-                const runningSet = new Set("runningIds" in result ? (result.runningIds ?? []) : [])
-                setConfig({
-                    configPath: result.configPath,
-                    configDir: result.configDir,
-                    procs: result.procs.map((p) => ({
-                        ...p,
-                        status: runningSet.has(p.id) ? ("running" as const) : ("stopped" as const),
-                        exitCode: null,
-                    })),
-                })
-                setSelectedProcId(result.procs[0]?.id ?? null)
+                applyLoadedConfig(result)
             })
         })
-    }, [api, config])
+    }, [api, config, applyLoadedConfig])
 
     const ipcListenersRegistered = useRef(false)
     useEffect(() => {
@@ -211,17 +226,7 @@ export default function App() {
             console.error(result.error)
             return
         }
-        const runningSet = new Set("runningIds" in result ? (result.runningIds ?? []) : [])
-        setConfig({
-            configPath: result.configPath,
-            configDir: result.configDir,
-            procs: result.procs.map((p) => ({
-                ...p,
-                status: runningSet.has(p.id) ? ("running" as const) : ("stopped" as const),
-                exitCode: null,
-            })),
-        })
-        setSelectedProcId(result.procs[0]?.id ?? null)
+        applyLoadedConfig(result)
     }
 
     if (!config) {

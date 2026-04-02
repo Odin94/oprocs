@@ -6,6 +6,8 @@ import { checkForUpdates, quitAndInstall } from "./updater.js"
 import type { ProcessManager } from "./processManager.js"
 import { log } from "./logger.js"
 
+const noWinCmdRewrite = process.argv.includes("--no-cmd-rewrite")
+
 export const setupIpc = (pm: ProcessManager) => {
     let currentConfigPath: string | null = null
     let currentConfigDir: string | null = null
@@ -41,7 +43,7 @@ export const setupIpc = (pm: ProcessManager) => {
         }
 
         const resolved = path.resolve(pathToLoad)
-        const loaded = loadConfig(resolved)
+        const loaded = loadConfig(resolved, { noWinCmdRewrite })
         if ("error" in loaded) return loaded
 
         currentConfigPath = resolved
@@ -95,6 +97,7 @@ export const setupIpc = (pm: ProcessManager) => {
             configDir: currentConfigDir ?? "",
             procs: Object.keys(loaded.config.procs).map((id) => ({ id, name: id })),
             runningIds,
+            normalizedProcNames: loaded.normalizedProcNames,
         }
     })
 

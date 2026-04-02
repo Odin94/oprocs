@@ -12,6 +12,20 @@ const PLATFORM_MAP: Record<string, string> = {
   netbsd: "netbsd",
 };
 
+/**
+ * Rewrites a Windows `cmd /c <shell-command>` invocation to the Unix equivalent
+ * `sh -c <shell-command>` when running on a non-Windows platform.
+ * Returns `null` when no rewrite is needed.
+ */
+export const normalizeCmdForPlatform = (cmd: string[], platform: string): string[] | null => {
+  if (platform === "win32") return null;
+  if (cmd.length >= 2 && cmd[0].toLowerCase() === "cmd" && cmd[1].toLowerCase() === "/c") {
+    const shellCommand = cmd.slice(2).join(" ");
+    return ["sh", "-c", shellCommand];
+  }
+  return null;
+};
+
 const resolveSelect = (value: unknown): unknown => {
   if (value == null || typeof value !== "object") return value;
   const obj = value as Record<string, unknown>;
@@ -36,7 +50,10 @@ const resolveValue = (value: unknown): unknown => {
   return resolved;
 };
 
-export const loadConfig = (configPath: string): { config: MprocsConfig; configDir: string } | { error: string } => {
+export const loadConfig = (
+  configPath: string,
+  options?: { noWinCmdRewrite?: boolean },
+): { config: MprocsConfig; configDir: string; normalizedProcNames: string[] } | { error: string } => {
   try {
     const resolved = path.resolve(configPath);
     if (!fs.existsSync(resolved)) {
@@ -50,11 +67,20 @@ export const loadConfig = (configPath: string): { config: MprocsConfig; configDi
     }
     const configDir = path.dirname(resolved);
     const procs: Record<string, ProcConfig> = {};
+    const normalizedProcNames: string[] = [];
     for (const [name, proc] of Object.entries(resolvedParsed.procs)) {
       if (proc && typeof proc === "object") {
+        let cmd = Array.isArray(proc.cmd) ? proc.cmd.map((c) => String(c)) : undefined;
+        if (cmd && !options?.noWinCmdRewrite) {
+          const normalized = normalizeCmdForPlatform(cmd, process.platform);
+          if (normalized) {
+            cmd = normalized;
+            normalizedProcNames.push(name);
+          }
+        }
         procs[name] = {
           shell: proc.shell != null ? String(resolveValue(proc.shell) ?? proc.shell) : undefined,
-          cmd: Array.isArray(proc.cmd) ? proc.cmd.map((c) => String(c)) : undefined,
+          cmd,
           cwd: proc.cwd != null ? String(proc.cwd).replace("<CONFIG_DIR>", configDir) : undefined,
           env: proc.env && typeof proc.env === "object" ? (resolveValue(proc.env) as Record<string, string | null>) : undefined,
           add_path: proc.add_path != null ? (Array.isArray(proc.add_path) ? proc.add_path : [proc.add_path]) : undefined,
@@ -64,7 +90,7 @@ export const loadConfig = (configPath: string): { config: MprocsConfig; configDi
         };
       }
     }
-    return { config: { procs }, configDir };
+    return { config: { procs }, configDir, normalizedProcNames };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return { error: `Failed to load config: ${message}` };
