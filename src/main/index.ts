@@ -3,10 +3,20 @@ import path from "path"
 import { ProcessManager } from "./processManager.js"
 import { setupIpc } from "./ipc.js"
 import { setupUpdater } from "./updater.js"
+import { loadAppConfig, initConfig } from "./appConfig.js"
+import { setQuiet } from "./logger.js"
+
+if (process.argv.includes("init-config")) {
+    initConfig()
+    process.exit(0)
+}
+
+const appConfig = loadAppConfig()
+if (appConfig.quiet) setQuiet(true)
 
 const isDev = process.env.NODE_ENV === "development" || !app.isPackaged
 
-const pm = new ProcessManager()
+const pm = new ProcessManager(appConfig)
 setupIpc(pm)
 
 const createWindow = () => {

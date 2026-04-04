@@ -7,6 +7,7 @@ import path from "path"
 import treeKill from "tree-kill"
 import type { ProcConfig } from "../shared/types.js"
 import { log } from "./logger.js"
+import { type AppConfig, DEFAULT_APP_CONFIG, resolvePathTemplate } from "./appConfig.js"
 
 const MAX_LINES = 10_000
 
@@ -47,6 +48,8 @@ export class ProcessManager {
         stopped: () => {},
     }
 
+    constructor(private appConfig: AppConfig = DEFAULT_APP_CONFIG) {}
+
     on(events: Partial<ProcessManagerEvents>) {
         this.listeners = { ...this.listeners, ...events }
     }
@@ -55,8 +58,22 @@ export class ProcessManager {
         this.configDir = dir
     }
 
+    private resolveLogDir(configDir: string): string {
+        if (this.appConfig.logs_dir) {
+            return resolvePathTemplate(this.appConfig.logs_dir, path.basename(configDir))
+        }
+        return path.join(configDir, ".oprocs")
+    }
+
+    private resolveLockDir(configDir: string): string {
+        if (this.appConfig.lock_dir) {
+            return resolvePathTemplate(this.appConfig.lock_dir, path.basename(configDir))
+        }
+        return configDir
+    }
+
     private getLockPath(): string {
-        return path.join(this.configDir, LOCK_FILE_NAME)
+        return path.join(this.resolveLockDir(this.configDir), LOCK_FILE_NAME)
     }
 
     isPidAlive(pid: number): boolean {
@@ -334,14 +351,17 @@ export class ProcessManager {
             return { ok: false, error: message }
         }
 
-        const logDir = path.join(configDir, "oprocs")
-        try {
-            fs.mkdirSync(logDir, { recursive: true })
-        } catch {
-            // ignore
+        const logDir = this.resolveLogDir(configDir)
+        let logStream: fs.WriteStream | null = null
+        if (!this.appConfig.no_logs) {
+            try {
+                fs.mkdirSync(logDir, { recursive: true })
+            } catch {
+                // ignore
+            }
+            const logPath = path.join(logDir, `${sanitizeProcName(procId)}.log`)
+            logStream = fs.createWriteStream(logPath, { flags: "a" })
         }
-        const logPath = path.join(logDir, `${sanitizeProcName(procId)}.log`)
-        const logStream = fs.createWriteStream(logPath, { flags: "a" })
 
         state.proc = child
         state.logStream = logStream
@@ -382,7 +402,7 @@ export class ProcessManager {
 
         const push = (text: string, isStderr: boolean) => {
             state.buffer += text
-            logStream.write(text)
+            logStream?.write(text)
             const parts = state.buffer.split("\n")
             state.buffer = parts.pop() ?? ""
             for (const line of parts) {
@@ -490,9 +510,9 @@ export class ProcessManager {
         if (state.lines.length > MAX_LINES) state.lines.shift()
         if (state.logStream) {
             state.logStream.write(line)
-        } else {
+        } else if (!this.appConfig.no_logs) {
             try {
-                const logDir = path.join(state.configDir, "oprocs")
+                const logDir = this.resolveLogDir(state.configDir)
                 fs.mkdirSync(logDir, { recursive: true })
                 const logPath = path.join(logDir, `${sanitizeProcName(procId)}.log`)
                 fs.appendFileSync(logPath, line, "utf-8")

@@ -17,6 +17,12 @@ const stream = isDev ? pinoPretty({ colorize: true, translateTime: "SYS:HH:MM:ss
 const pinoLogger = pino({ level: isDev ? "debug" : "info", base: { name: "oprocs" } }, stream)
 const lockLogger = pinoLogger.child({ module: "lock" })
 
+export function setQuiet(quiet: boolean): void {
+    const level = quiet ? "silent" : (isDev ? "debug" : "info")
+    pinoLogger.level = level
+    lockLogger.level = level
+}
+
 const formatMsg = (msg: string, ...args: unknown[]) => {
     if (args.length === 0) return msg
     let i = 0
