@@ -15,6 +15,46 @@ const sanitizeProcName = (name: string): string => name.replace(/[/\\:*?"<>|]/g,
 
 const LOCK_FILE_NAME = ".oprocs.lock"
 
+const isCmdExe = (value: string): boolean => {
+    const lower = value.toLowerCase()
+    return lower === "cmd" || lower.endsWith("\\cmd.exe") || lower === "cmd.exe"
+}
+
+const isPowerShellExe = (value: string): boolean => {
+    const lower = value.toLowerCase()
+    return lower === "powershell" || lower === "powershell.exe" || lower.endsWith("\\powershell.exe")
+}
+
+const isPwshExe = (value: string): boolean => {
+    const lower = value.toLowerCase()
+    return lower === "pwsh" || lower === "pwsh.exe" || lower.endsWith("\\pwsh.exe")
+}
+
+export const withWindowsUtf8Shell = (command: string, shellExe: string): string => {
+    if (isCmdExe(shellExe)) {
+        return `chcp 65001>nul && ${command}`
+    }
+    if (isPowerShellExe(shellExe) || isPwshExe(shellExe)) {
+        return `[Console]::InputEncoding=[Text.UTF8Encoding]::new($false); [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false); ${command}`
+    }
+    return command
+}
+
+export const withWindowsUtf8CmdArgs = (cmd: string, args: string[]): string[] => {
+    if (isCmdExe(cmd) && args.length >= 2 && args[0].toLowerCase() === "/c") {
+        return [args[0], withWindowsUtf8Shell(args.slice(1).join(" "), cmd)]
+    }
+
+    const commandFlagIndex = args.findIndex((arg) => /^-(command|c)$/i.test(arg))
+    if ((isPowerShellExe(cmd) || isPwshExe(cmd)) && commandFlagIndex >= 0 && commandFlagIndex + 1 < args.length) {
+        const next = [...args]
+        next[commandFlagIndex + 1] = withWindowsUtf8Shell(next[commandFlagIndex + 1], cmd)
+        return next
+    }
+
+    return args
+}
+
 type AdoptedHandle = { pid: number }
 type ProcHandle = ChildProcess | AdoptedHandle
 
@@ -324,7 +364,7 @@ export class ProcessManager {
             if (config.shell != null) {
                 const shell = process.platform === "win32" ? (process.env.ComSpec ?? "cmd.exe") : "/bin/sh"
                 const flag = process.platform === "win32" ? "/c" : "-c"
-                const shellCmd = process.platform === "win32" ? config.shell : "exec " + config.shell
+                const shellCmd = process.platform === "win32" ? withWindowsUtf8Shell(config.shell, shell) : "exec " + config.shell
                 const spawnOpts: Parameters<typeof spawn>[2] = {
                     cwd,
                     env,
@@ -337,7 +377,8 @@ export class ProcessManager {
                 child = spawn(shell, [flag, shellCmd], spawnOpts)
             } else if (config.cmd?.length) {
                 const [cmd, ...args] = config.cmd
-                child = spawn(cmd, args, {
+                const effectiveArgs = process.platform === "win32" ? withWindowsUtf8CmdArgs(cmd, args) : args
+                child = spawn(cmd, effectiveArgs, {
                     cwd,
                     env,
                     stdio: ["ignore", "pipe", "pipe"],
