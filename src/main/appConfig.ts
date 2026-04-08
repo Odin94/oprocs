@@ -67,7 +67,7 @@ const INIT_CONFIG_CONTENT = `# oprocs global configuration
 
 # Directory for the oprocs lock file (.oprocs.lock).
 # Supports {folder_name}: the name of the directory containing your oprocs/mprocs config file.
-# If unset, the lock file is stored at <config-file-dir>/.oprocs.lock
+# If unset, the lock file is stored at <config-file-dir>/.oprocs/.oprocs.lock
 # Example: lock_dir: "~/.oprocs-locks/{folder_name}"
 # lock_dir:
 

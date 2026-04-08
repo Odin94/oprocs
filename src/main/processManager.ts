@@ -109,7 +109,7 @@ export class ProcessManager {
         if (this.appConfig.lock_dir) {
             return resolvePathTemplate(this.appConfig.lock_dir, path.basename(configDir))
         }
-        return configDir
+        return path.join(configDir, ".oprocs")
     }
 
     private getLockPath(): string {
