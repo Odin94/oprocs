@@ -1,9 +1,11 @@
-import React, { useCallback, useRef, useEffect, useMemo, useState } from "react"
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso"
+import { ExternalLinkIcon, WrapTextIcon } from "./icons"
 import { parseAnsiToSegments, withoutAnsiColors } from "./utils/ansi"
 
 const LINE_HEIGHT = 20
-const CHAR_WIDTH = 7.8 // approximate px per char at 13px monospace
+const CHAR_WIDTH = 7.8
+const URL_REGEX = /https?:\/\/[^\s'",)}\]>]+/g
 
 export type Match = { lineIndex: number; start: number; end: number }
 
@@ -15,26 +17,51 @@ type OutputPanelProps = {
     filteredIndices: number[]
     filterLines: boolean
     currentMatchIndex: number
-    onScrollToMatch?: (lineIndex: number) => void
+    status?: "running" | "stopped"
+    exitCode?: number | null
+    openUrl?: string
+    toolbar?: React.ReactNode
 }
 
-// Defined outside the component so Virtuoso gets stable component references.
 const HScrollScroller = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
     ({ style, ...props }, ref) => <div ref={ref} style={{ ...style, overflowX: "auto" }} {...props} />,
 )
 
 const MinWidthList = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement> & { context?: { minWidth: number } }>(
-    ({ style, context, ...props }, ref) => (
-        <div ref={ref} style={{ ...style, minWidth: context?.minWidth }} {...props} />
-    ),
+    ({ style, context, ...props }, ref) => <div ref={ref} style={{ ...style, minWidth: context?.minWidth }} {...props} />,
 )
 
 const hScrollComponents = { Scroller: HScrollScroller, List: MinWidthList }
 
-export const OutputPanel = ({ procId, procName, lines, matches, filteredIndices, filterLines, currentMatchIndex }: OutputPanelProps) => {
+function extractUrls(lines: string[], preferredUrl?: string) {
+    const urls = new Set<string>()
+    if (preferredUrl) urls.add(preferredUrl)
+    for (const line of lines) {
+        const matches = line.match(URL_REGEX)
+        if (!matches) continue
+        for (const url of matches) urls.add(url)
+        if (urls.size >= 3) break
+    }
+    return Array.from(urls).slice(0, 3)
+}
+
+export const OutputPanel = ({
+    procId,
+    procName,
+    lines,
+    matches,
+    filteredIndices,
+    filterLines,
+    currentMatchIndex,
+    status,
+    exitCode,
+    openUrl,
+    toolbar,
+}: OutputPanelProps) => {
     const virtuosoRef = useRef<VirtuosoHandle>(null)
     const [wrapLines, setWrapLines] = useState(false)
     const currentMatch = matches[currentMatchIndex] ?? null
+    const detectedUrls = useMemo(() => extractUrls(lines, openUrl), [lines, openUrl])
 
     const displayLength = filterLines ? filteredIndices.length : lines.length
     const getSourceLineIndex = useCallback(
@@ -42,15 +69,14 @@ export const OutputPanel = ({ procId, procName, lines, matches, filteredIndices,
         [filterLines, filteredIndices],
     )
 
-    // Reset wrap state when switching processes
     useEffect(() => {
         setWrapLines(false)
     }, [procId])
 
     const maxLineWidth = useMemo(() => {
         if (wrapLines) return 0
-        const maxChars = lines.reduce((max, l) => Math.max(max, withoutAnsiColors(l).length), 0)
-        return maxChars * CHAR_WIDTH + 8 // 8 = paddingLeft
+        const maxChars = lines.reduce((max, line) => Math.max(max, withoutAnsiColors(line).length), 0)
+        return maxChars * CHAR_WIDTH + 8
     }, [lines, wrapLines])
 
     const scrollToLine = useCallback(
@@ -71,6 +97,7 @@ export const OutputPanel = ({ procId, procName, lines, matches, filteredIndices,
     useEffect(() => {
         lastScrolledMatchIndexRef.current = -1
     }, [procId])
+
     useEffect(() => {
         if (currentMatchIndex !== lastScrolledMatchIndexRef.current && matches[currentMatchIndex]) {
             lastScrolledMatchIndexRef.current = currentMatchIndex
@@ -80,7 +107,7 @@ export const OutputPanel = ({ procId, procName, lines, matches, filteredIndices,
 
     if (!procId) {
         return (
-            <div className="flex-1 overflow-auto py-3 px-4 font-mono text-[13px] leading-relaxed whitespace-pre-wrap break-all text-slate-500">
+            <div className="flex flex-1 items-center justify-center bg-log-bg px-4 py-8 text-sm text-muted-foreground">
                 Select a process to view output.
             </div>
         )
@@ -89,45 +116,87 @@ export const OutputPanel = ({ procId, procName, lines, matches, filteredIndices,
     const itemContent = (displayIndex: number) => {
         const sourceLineIndex = getSourceLineIndex(displayIndex)
         const rawLine = lines[sourceLineIndex] ?? ""
-        const lineMatches = matches.filter((m) => m.lineIndex === sourceLineIndex)
+        const lineMatches = matches.filter((match) => match.lineIndex === sourceLineIndex)
         const isCurrentLine = currentMatch != null && currentMatch.lineIndex === sourceLineIndex
 
         return (
             <div
+                className="log-line flex gap-3 px-4"
                 style={{
                     ...(wrapLines ? { minHeight: LINE_HEIGHT } : { height: LINE_HEIGHT }),
                     lineHeight: `${LINE_HEIGHT}px`,
-                    paddingLeft: 4,
-                    fontFamily: "ui-monospace, monospace",
-                    fontSize: 13,
+                    fontFamily: "var(--font-mono)",
+                    fontSize: 12,
                     whiteSpace: wrapLines ? "pre-wrap" : "pre",
                 }}
             >
-                {renderLineWithAnsiAndHighlights(rawLine, lineMatches, currentMatch, isCurrentLine)}
+                <span className="shrink-0 select-none text-muted-foreground/40 tabular-nums">
+                    {String(sourceLineIndex + 1).padStart(3, " ")}
+                </span>
+                <span className="min-w-0 break-all text-log-text">
+                    {renderLineWithAnsiAndHighlights(rawLine, lineMatches, currentMatch, isCurrentLine)}
+                </span>
             </div>
         )
     }
 
     return (
-        <div className="flex flex-col flex-1 min-w-0 min-h-0">
-            <div className="py-2 px-4 border-b border-slate-700 flex gap-2 flex-wrap items-center">
-                <span className="self-center mr-2">{procName}</span>
+        <div className="flex flex-1 min-h-0 min-w-0 flex-col">
+            <div className="flex items-center gap-2 border-b border-border bg-card px-4 py-2">
+                <div className="flex min-w-0 items-center gap-1.5">
+                    <span
+                        className={`inline-block h-2 w-2 rounded-full ${
+                            status === "running"
+                                ? "bg-status-running animate-pulse-dot"
+                                : exitCode != null && exitCode !== 0
+                                  ? "bg-status-stopped"
+                                  : "bg-status-idle"
+                        }`}
+                    />
+                    <h2 className="truncate text-sm font-semibold text-foreground">{procName}</h2>
+                    <span className="rounded bg-surface px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+                        {status === "running" ? "running" : exitCode != null ? `exit ${exitCode}` : "stopped"}
+                    </span>
+                </div>
+                {detectedUrls.length > 0 ? (
+                    <div className="flex min-w-0 items-center gap-1.5 overflow-hidden">
+                        {detectedUrls.map((url) => (
+                            <button
+                                key={url}
+                                type="button"
+                                onClick={() => void window.electronAPI?.openExternalLink(url)}
+                                className="flex max-w-[220px] items-center gap-1 rounded-md border border-accent/30 bg-accent/10 px-2 py-1 text-[11px] font-medium text-accent transition-colors hover:bg-accent/20"
+                                title={url}
+                            >
+                                <ExternalLinkIcon className="h-3 w-3 shrink-0" />
+                                <span className="truncate">{url.replace(/^https?:\/\//, "")}</span>
+                            </button>
+                        ))}
+                    </div>
+                ) : null}
+                <div className="flex-1" />
+                <span className="font-mono text-xs text-muted-foreground">{lines.length} lines</span>
                 <button
                     type="button"
-                    onClick={() => setWrapLines((w) => !w)}
-                    className={`px-2 py-0.5 text-xs rounded border ${
+                    onClick={() => setWrapLines((value) => !value)}
+                    className={`flex items-center gap-1 rounded-md border px-2 py-1 text-xs transition-colors ${
                         wrapLines
-                            ? "bg-slate-600 border-slate-500 text-slate-200"
-                            : "border-slate-600 text-slate-400 hover:text-slate-200"
+                            ? "border-accent bg-accent/20 text-accent"
+                            : "border-border text-muted-foreground hover:bg-surface-hover hover:text-foreground"
                     }`}
+                    title="Wrap lines"
                 >
+                    <WrapTextIcon className="h-3.5 w-3.5" />
                     Wrap
                 </button>
             </div>
+            {toolbar}
             {displayLength === 0 ? (
-                <div className="flex-1 overflow-auto py-3 px-4 font-mono text-[13px] text-slate-500">No output yet.</div>
+                <div className="flex-1 overflow-auto bg-log-bg py-8 px-4 text-center font-mono text-[13px] text-muted-foreground">
+                    No output yet.
+                </div>
             ) : (
-                <div className="flex-1 min-h-0 p-0">
+                <div className="log-lines-enter flex-1 min-h-0 bg-log-bg py-4">
                     {wrapLines ? (
                         <Virtuoso
                             key="wrap"
@@ -171,7 +240,7 @@ const renderLineWithAnsiAndHighlights = (
         const segEnd = plainOffset + seg.text.length
         plainOffset = segEnd
 
-        const overlapping = matchRanges.filter((m) => m.end > segStart && m.start < segEnd)
+        const overlapping = matchRanges.filter((match) => match.end > segStart && match.start < segEnd)
         if (overlapping.length === 0) {
             parts.push(
                 <span
@@ -192,11 +261,11 @@ const renderLineWithAnsiAndHighlights = (
 
         let pos = segStart
         const sorted = [...overlapping].sort((a, b) => a.start - b.start)
-        for (const m of sorted) {
-            const mStart = Math.max(m.start, pos)
-            const mEnd = Math.min(m.end, segEnd)
-            if (mStart >= mEnd) continue
-            if (mStart > pos) {
+        for (const match of sorted) {
+            const matchStart = Math.max(match.start, pos)
+            const matchEnd = Math.min(match.end, segEnd)
+            if (matchStart >= matchEnd) continue
+            if (matchStart > pos) {
                 parts.push(
                     <span
                         key={parts.length}
@@ -208,17 +277,24 @@ const renderLineWithAnsiAndHighlights = (
                             fontStyle: seg.italic ? "italic" : undefined,
                         }}
                     >
-                        {seg.text.slice(pos - segStart, mStart - segStart)}
+                        {seg.text.slice(pos - segStart, matchStart - segStart)}
                     </span>,
                 )
             }
-            const isCurrent = isCurrentLine && currentMatch && currentMatch.start === m.start && currentMatch.end === m.end
+            const isCurrent = isCurrentLine && currentMatch && currentMatch.start === match.start && currentMatch.end === match.end
             parts.push(
-                <mark key={parts.length} className={isCurrent ? "bg-amber-500 text-slate-900 px-0.5" : "bg-slate-600 px-0.5"}>
-                    {seg.text.slice(mStart - segStart, mEnd - segStart)}
+                <mark
+                    key={parts.length}
+                    className={
+                        isCurrent
+                            ? "rounded-sm bg-log-highlight/30 px-0.5 text-accent-foreground"
+                            : "rounded-sm bg-surface-active px-0.5 text-foreground"
+                    }
+                >
+                    {seg.text.slice(matchStart - segStart, matchEnd - segStart)}
                 </mark>,
             )
-            pos = mEnd
+            pos = matchEnd
         }
         if (pos < segEnd) {
             parts.push(

@@ -1,3 +1,5 @@
+import { RefreshCwIcon, StopCircleIcon } from "./icons"
+
 type ProcessListActionsProps = {
     onStopAll: () => void
     onRestartAll: () => void
@@ -6,7 +8,7 @@ type ProcessListActionsProps = {
 }
 
 const buttonCls =
-    "flex-1 px-3 py-2 border border-slate-600 rounded-md bg-slate-800 text-slate-200 cursor-pointer text-[13px] hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
+    "flex flex-1 items-center justify-center gap-1.5 rounded-md bg-surface px-3 py-2 text-xs font-medium text-secondary-foreground transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50"
 
 export const ProcessListActions = ({
     onStopAll,
@@ -14,21 +16,13 @@ export const ProcessListActions = ({
     stopAllDisabled,
     restartAllDisabled,
 }: ProcessListActionsProps) => (
-    <div className="shrink-0 border-t border-slate-700 p-3 flex gap-2">
-        <button
-            type="button"
-            onClick={onStopAll}
-            disabled={stopAllDisabled}
-            className={buttonCls}
-        >
+    <div className="cozy-sidebar-section shrink-0 flex gap-2 border-t border-border p-3">
+        <button type="button" onClick={onStopAll} disabled={stopAllDisabled} className={`${buttonCls} cozy-sidebar-button`}>
+            <StopCircleIcon className="h-3.5 w-3.5" />
             Stop All
         </button>
-        <button
-            type="button"
-            onClick={onRestartAll}
-            disabled={restartAllDisabled}
-            className={buttonCls}
-        >
+        <button type="button" onClick={onRestartAll} disabled={restartAllDisabled} className={`${buttonCls} cozy-sidebar-button`}>
+            <RefreshCwIcon className="h-3.5 w-3.5" />
             Restart All
         </button>
     </div>

@@ -1,13 +1,391 @@
+@import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@400;600;700;800&display=swap");
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
-  body {
-    @apply bg-slate-900 text-slate-200 text-sm font-sans antialiased;
-  }
+    :root,
+    [data-theme="tech"] {
+        --background: 228 12% 8%;
+        --foreground: 220 13% 91%;
+        --card: 228 12% 11%;
+        --card-foreground: 220 13% 91%;
+        --popover: 228 12% 11%;
+        --popover-foreground: 220 13% 91%;
+        --primary: 142 72% 50%;
+        --primary-foreground: 228 12% 8%;
+        --secondary: 228 10% 16%;
+        --secondary-foreground: 220 13% 75%;
+        --muted: 228 10% 14%;
+        --muted-foreground: 220 10% 50%;
+        --accent: 217 92% 60%;
+        --accent-foreground: 220 13% 95%;
+        --destructive: 0 72% 55%;
+        --destructive-foreground: 220 13% 95%;
+        --border: 228 10% 18%;
+        --input: 228 10% 18%;
+        --ring: 142 72% 50%;
+        --warning: 38 92% 55%;
+        --warning-foreground: 228 12% 8%;
+        --surface: 228 12% 13%;
+        --surface-hover: 228 12% 16%;
+        --surface-active: 228 12% 24%;
+        --log-bg: 228 14% 6%;
+        --log-text: 220 10% 72%;
+        --log-highlight: 217 92% 60%;
+        --status-running: 142 72% 50%;
+        --status-stopped: 0 72% 55%;
+        --status-idle: 220 10% 40%;
+        --sidebar-background: 228 12% 10%;
+        --sidebar-foreground: 220 13% 80%;
+        --sidebar-primary: 142 72% 50%;
+        --sidebar-primary-foreground: 228 12% 8%;
+        --sidebar-accent: 228 10% 16%;
+        --sidebar-accent-foreground: 220 13% 91%;
+        --sidebar-border: 228 10% 16%;
+        --sidebar-ring: 142 72% 50%;
+        --font-display: "Inter", system-ui, sans-serif;
+        --font-body: "Inter", system-ui, sans-serif;
+        --font-mono: "JetBrains Mono", monospace;
+        --radius: 0.5rem;
+        --radius-card: 0.5rem;
+    }
+
+    [data-theme="cozy"] {
+        --background: 30 40% 92%;
+        --foreground: 340 20% 25%;
+        --card: 30 40% 98%;
+        --card-foreground: 340 20% 25%;
+        --popover: 30 40% 98%;
+        --popover-foreground: 340 20% 25%;
+        --primary: 330 65% 65%;
+        --primary-foreground: 0 0% 100%;
+        --secondary: 280 40% 92%;
+        --secondary-foreground: 280 30% 40%;
+        --muted: 30 30% 93%;
+        --muted-foreground: 340 10% 55%;
+        --accent: 200 70% 65%;
+        --accent-foreground: 0 0% 100%;
+        --destructive: 0 60% 65%;
+        --destructive-foreground: 0 0% 100%;
+        --border: 330 30% 88%;
+        --input: 330 30% 88%;
+        --ring: 330 65% 65%;
+        --warning: 40 80% 60%;
+        --warning-foreground: 40 80% 20%;
+        --surface: 280 30% 95%;
+        --surface-hover: 280 35% 92%;
+        --surface-active: 330 45% 84%;
+        --log-bg: 30 40% 97%;
+        --log-text: 340 15% 35%;
+        --log-highlight: 330 65% 65%;
+        --status-running: 155 55% 55%;
+        --status-stopped: 0 55% 65%;
+        --status-idle: 340 10% 70%;
+        --sidebar-background: 280 25% 96%;
+        --sidebar-foreground: 340 20% 35%;
+        --sidebar-primary: 330 65% 65%;
+        --sidebar-primary-foreground: 0 0% 100%;
+        --sidebar-accent: 330 30% 92%;
+        --sidebar-accent-foreground: 340 20% 25%;
+        --sidebar-border: 330 25% 90%;
+        --sidebar-ring: 330 65% 65%;
+        --font-display: "Nunito", system-ui, sans-serif;
+        --font-body: "Nunito", system-ui, sans-serif;
+        --font-mono: "JetBrains Mono", monospace;
+        --radius: 0.75rem;
+        --radius-card: 1rem;
+    }
+
+    * {
+        @apply border-border;
+    }
+
+    html,
+    body,
+    #root {
+        height: 100%;
+    }
+
+    body {
+        @apply bg-background text-foreground text-sm antialiased;
+        font-family: var(--font-body);
+        margin: 0;
+    }
+
+    button,
+    input,
+    select {
+        font: inherit;
+    }
+}
+
+[data-theme="cozy"] {
+    font-family: "Nunito", system-ui, sans-serif;
+}
+
+[data-theme="cozy"] aside {
+    border-right-style: dashed;
+}
+
+[data-theme="cozy"] button,
+[data-theme="cozy"] input,
+[data-theme="cozy"] select {
+    border-radius: 0.75rem;
+}
+
+[data-theme="cozy"] .animate-pulse-dot {
+    animation: cozy-bounce 1.5s ease-in-out infinite;
+}
+
+@keyframes cozy-bounce {
+    0%,
+    100% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.4);
+    }
+}
+
+.log-lines-enter .log-line {
+    opacity: 0;
+    animation: log-line-enter 0.4s ease-out forwards;
+}
+
+@keyframes log-line-enter {
+    0% {
+        opacity: 0;
+        transform: translateY(6px);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+[data-theme="cozy"] .log-lines-enter .log-line {
+    animation-name: cozy-log-line-enter;
+    animation-duration: 0.5s;
+    animation-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes cozy-log-line-enter {
+    0% {
+        opacity: 0;
+        transform: translateY(12px) scale(0.97);
+        filter: blur(2px);
+    }
+    60% {
+        opacity: 1;
+        filter: blur(0);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+        filter: blur(0);
+    }
+}
+
+[data-theme="cozy"] nav .group:hover {
+    animation: cozy-wiggle 0.4s ease-in-out;
+}
+
+@keyframes cozy-wiggle {
+    0%,
+    100% {
+        transform: rotate(0deg);
+    }
+    25% {
+        transform: rotate(-0.4deg);
+    }
+    75% {
+        transform: rotate(0.4deg);
+    }
+}
+
+[data-theme="cozy"] * {
+    transition-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1);
+    transition-property: color, border-color, opacity, transform, box-shadow;
+}
+
+[data-theme="cozy"].cozy-bg {
+    position: relative;
+    isolation: isolate;
+    background: hsl(var(--background));
+}
+
+[data-theme="cozy"] .cozy-bg-layer {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background:
+        radial-gradient(
+            ellipse 80% 60% at 10% 20%,
+            hsl(330 65% 70% / 0.7) 0%,
+            transparent 60%
+        ),
+        radial-gradient(
+            ellipse 60% 50% at 85% 15%,
+            hsl(280 50% 70% / 0.65) 0%,
+            transparent 55%
+        ),
+        radial-gradient(
+            ellipse 50% 40% at 50% 80%,
+            hsl(200 60% 70% / 0.6) 0%,
+            transparent 50%
+        ),
+        radial-gradient(
+            ellipse 40% 30% at 75% 65%,
+            hsl(40 70% 75% / 0.55) 0%,
+            transparent 45%
+        );
+}
+
+[data-theme="cozy"] .cozy-pane-bg {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background:
+        radial-gradient(
+            ellipse 80% 60% at 10% 20%,
+            hsl(330 65% 70% / 0.7) 0%,
+            transparent 60%
+        ),
+        radial-gradient(
+            ellipse 60% 50% at 85% 15%,
+            hsl(280 50% 70% / 0.65) 0%,
+            transparent 55%
+        ),
+        radial-gradient(
+            ellipse 50% 40% at 50% 80%,
+            hsl(200 60% 70% / 0.6) 0%,
+            transparent 50%
+        ),
+        radial-gradient(
+            ellipse 40% 30% at 75% 65%,
+            hsl(40 70% 75% / 0.55) 0%,
+            transparent 45%
+        );
+}
+
+[data-theme="cozy"] aside {
+  background: hsl(var(--card) / 0.7);
+  backdrop-filter: blur(12px);
+}
+
+[data-theme="cozy"] .cozy-sidebar-shell.bg-card {
+  background: hsl(var(--card) / 0.38);
+  backdrop-filter: blur(18px);
+  position: relative;
+  z-index: 1;
+}
+
+[data-theme="cozy"] .cozy-sidebar-section {
+  background: hsl(var(--card) / 0.18);
+  backdrop-filter: blur(10px);
+}
+
+[data-theme="cozy"] .cozy-sidebar-nav {
+  background: transparent;
+}
+
+[data-theme="cozy"] main {
+  position: relative;
+  z-index: 1;
+}
+
+[data-theme="cozy"] aside .bg-surface {
+  background: hsl(var(--surface) / 0.48);
+  backdrop-filter: blur(8px);
+}
+
+[data-theme="cozy"] aside .bg-surface-active {
+  background: hsl(var(--surface-active) / 0.62);
+  backdrop-filter: blur(8px);
+}
+
+[data-theme="cozy"] aside .hover\:bg-surface-hover:hover {
+  background: hsl(var(--surface-hover) / 0.42);
+}
+
+[data-theme="cozy"] aside .border-accent\/30 {
+  border-color: hsl(var(--accent) / 0.28);
+}
+
+[data-theme="cozy"] aside .bg-accent\/10 {
+  background: hsl(var(--accent) / 0.12);
+}
+
+[data-theme="cozy"] aside .hover\:bg-accent\/20:hover {
+  background: hsl(var(--accent) / 0.18);
+}
+
+[data-theme="cozy"] .cozy-sidebar-button {
+  background: hsl(var(--surface) / 0.28);
+  backdrop-filter: blur(10px);
+}
+
+[data-theme="cozy"] .cozy-sidebar-card {
+  background: hsl(var(--card) / 0.08);
+  backdrop-filter: blur(6px);
+}
+
+[data-theme="cozy"] .cozy-sidebar-card:hover {
+  background: hsl(var(--surface-hover) / 0.28);
+}
+
+[data-theme="cozy"] .cozy-sidebar-card-active {
+  background: hsl(var(--surface-active) / 0.46);
+  box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.24);
+}
+
+[data-theme="cozy"] .cozy-sidebar-chip {
+  background: hsl(var(--accent) / 0.12);
+  backdrop-filter: blur(8px);
+}
+
+[data-theme="cozy"] .bg-log-bg {
+    background: hsl(var(--log-bg) / 0.5);
+    backdrop-filter: blur(8px);
+}
+
+[data-theme="cozy"] .bg-card {
+    background: hsl(var(--card) / 0.6);
+    backdrop-filter: blur(8px);
 }
 
 #root {
-  @apply h-screen flex flex-col;
+    @apply h-screen flex flex-col;
+}
+
+@layer utilities {
+    .font-mono {
+        font-family: var(--font-mono);
+    }
+
+    .scrollbar-thin::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+    }
+
+    .scrollbar-thin::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    .scrollbar-thin::-webkit-scrollbar-thumb {
+        background: hsl(var(--border));
+        border-radius: 9999px;
+    }
+
+    .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+        background: hsl(var(--muted-foreground));
+    }
+}
+
+[data-theme="cozy"] .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: hsl(var(--primary) / 0.3);
 }

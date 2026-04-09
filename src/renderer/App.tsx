@@ -50,6 +50,7 @@ declare global {
 const api = window.electronAPI
 
 export default function App() {
+    const [theme, setTheme] = useState<"tech" | "cozy">("tech")
     const [config, setConfig] = useState<ConfigState>(null)
     const [selectedProcId, setSelectedProcId] = useState<string | null>(null)
     const [outputByProc, setOutputByProc] = useState<Record<string, string>>({})
@@ -231,11 +232,12 @@ export default function App() {
 
     if (!config) {
         return (
-            <div className="flex flex-1 min-h-0">
-                <div className="flex-1 flex items-center justify-center text-slate-500">
+            <div data-theme={theme} className={`flex h-screen w-full flex-1 min-h-0 ${theme === "cozy" ? "cozy-bg" : ""}`}>
+                {theme === "cozy" ? <div aria-hidden="true" className="cozy-bg-layer" /> : null}
+                <div className="flex-1 flex items-center justify-center text-muted-foreground">
                     <button
                         onClick={openConfig}
-                        className="px-4 py-2 border border-slate-600 rounded-md bg-slate-800 text-slate-200 cursor-pointer text-[13px] hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="rounded-md border border-border bg-card px-4 py-2 text-[13px] text-foreground transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50"
                     >
                         Open mprocs.yaml
                     </button>
@@ -245,77 +247,75 @@ export default function App() {
     }
 
     return (
-        <div className="flex flex-1 min-h-0 flex-col">
+        <div data-theme={theme} className={`flex h-screen w-full flex-1 min-h-0 flex-col ${theme === "cozy" ? "cozy-bg" : ""}`}>
+            {theme === "cozy" ? <div aria-hidden="true" className="cozy-bg-layer" /> : null}
             {updateReadyVersion ? (
-                <div className="shrink-0 flex items-center justify-between gap-4 px-4 py-2 bg-emerald-900/80 border-b border-emerald-700 text-emerald-100 text-sm">
+                <div className="relative z-10 shrink-0 flex items-center justify-between gap-4 border-b border-primary/40 bg-primary/20 px-4 py-2 text-sm text-foreground">
                     <span>Update v{updateReadyVersion} ready</span>
                     <div className="flex gap-2">
                         <button
                             type="button"
                             onClick={() => api?.quitAndInstall()}
-                            className="px-3 py-1 rounded bg-emerald-700 hover:bg-emerald-600 text-white font-medium"
+                            className="rounded-md bg-primary px-3 py-1 text-xs font-medium text-primary-foreground transition-opacity hover:opacity-90"
                         >
                             Restart to update
                         </button>
                         <button
                             type="button"
                             onClick={() => setUpdateReadyVersion(null)}
-                            className="px-3 py-1 rounded bg-slate-600 hover:bg-slate-500 text-slate-200"
+                            className="rounded-md bg-surface px-3 py-1 text-xs text-secondary-foreground transition-colors hover:bg-surface-hover"
                         >
                             Later
                         </button>
                     </div>
                 </div>
             ) : null}
-            <div className="flex flex-1 min-h-0">
-                <aside className="w-60 shrink-0 bg-slate-800 border-r border-slate-700 flex flex-col overflow-hidden">
-                    <div className="py-3 px-4 font-semibold border-b border-slate-700">oprocs</div>
-                    <div className="py-3 px-4 border-b border-slate-700">
-                        <button
-                            onClick={openConfig}
-                            type="button"
-                            className="px-4 py-2 border border-slate-600 rounded-md bg-slate-800 text-slate-200 cursor-pointer text-[13px] hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                            Change config
-                        </button>
-                    </div>
-                    <ProcessList
-                        procs={config.procs}
-                        selectedProcId={selectedProcId}
-                        onSelect={setSelectedProcId}
-                        onStart={(id: string) => api?.startProc(id) ?? Promise.resolve()}
-                        onStop={(id: string) => api?.stopProc(id) ?? Promise.resolve()}
-                        onRestart={(id: string) => api?.restartProc(id) ?? Promise.resolve()}
-                    />
-                </aside>
+            <div className="relative z-10 flex flex-1 min-h-0 overflow-hidden">
+                {theme === "cozy" ? <div aria-hidden="true" className="cozy-pane-bg" /> : null}
+                <ProcessList
+                    procs={config.procs}
+                    selectedProcId={selectedProcId}
+                    onSelect={setSelectedProcId}
+                    onStart={(id: string) => api?.startProc(id) ?? Promise.resolve()}
+                    onStop={(id: string) => api?.stopProc(id) ?? Promise.resolve()}
+                    onRestart={(id: string) => api?.restartProc(id) ?? Promise.resolve()}
+                    theme={theme}
+                    onToggleTheme={() => setTheme((current) => (current === "tech" ? "cozy" : "tech"))}
+                    onOpenConfig={openConfig}
+                />
                 <main className="flex-1 flex flex-col min-w-0">
-                    <SearchBar
-                        query={searchQuery}
-                        setQuery={setSearchQuery}
-                        mode={searchMode}
-                        setMode={setSearchMode}
-                        caseSensitive={caseSensitive}
-                        setCaseSensitive={setCaseSensitive}
-                        filterLines={filterLines}
-                        setFilterLines={setFilterLines}
-                        matchCount={matches.length}
-                        currentMatchIndex={currentMatchIndex}
-                        onNext={handleNextMatch}
-                        onPrev={handlePrevMatch}
-                        onSearch={(q) => runSearch(q)}
-                        hasOutput={!!selectedProcId && !!(outputByProc[selectedProcId] ?? "").trim()}
-                        onClearOutput={clearOutputForCurrentProc}
-                        canUndoClear={clearedOutputSnapshot !== null && clearedOutputSnapshot.procId === selectedProcId}
-                        onUndoClear={undoClearOutput}
-                    />
                     <OutputPanel
                         procId={selectedProcId}
                         procName={config.procs.find((p) => p.id === selectedProcId)?.name ?? ""}
+                        status={config.procs.find((p) => p.id === selectedProcId)?.status}
+                        exitCode={config.procs.find((p) => p.id === selectedProcId)?.exitCode}
+                        openUrl={config.procs.find((p) => p.id === selectedProcId)?.openUrl}
                         lines={lines}
                         matches={matches}
                         filteredIndices={filteredIndices}
                         filterLines={filterLines}
                         currentMatchIndex={currentMatchIndex}
+                        toolbar={
+                            <SearchBar
+                                query={searchQuery}
+                                setQuery={setSearchQuery}
+                                mode={searchMode}
+                                setMode={setSearchMode}
+                                caseSensitive={caseSensitive}
+                                setCaseSensitive={setCaseSensitive}
+                                filterLines={filterLines}
+                                setFilterLines={setFilterLines}
+                                matchCount={matches.length}
+                                currentMatchIndex={currentMatchIndex}
+                                onNext={handleNextMatch}
+                                onPrev={handlePrevMatch}
+                                onSearch={(q) => runSearch(q)}
+                                hasOutput={!!selectedProcId && !!(outputByProc[selectedProcId] ?? "").trim()}
+                                onClearOutput={clearOutputForCurrentProc}
+                                canUndoClear={clearedOutputSnapshot !== null && clearedOutputSnapshot.procId === selectedProcId}
+                                onUndoClear={undoClearOutput}
+                            />
+                        }
                     />
                 </main>
             </div>
