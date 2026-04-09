@@ -12,3 +12,5 @@ oprocs/
 plans.md
 
 .env
+
+.ignored/
