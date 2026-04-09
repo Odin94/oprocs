@@ -12,6 +12,7 @@ export type Match = { lineIndex: number; start: number; end: number }
 type OutputPanelProps = {
     procId: string | null
     procName: string
+    theme: "tech" | "cozy"
     lines: string[]
     matches: Match[]
     filteredIndices: number[]
@@ -23,6 +24,20 @@ type OutputPanelProps = {
     toolbar?: React.ReactNode
 }
 
+type LogLineRowProps = {
+    animationEpoch: number
+    lineHeight: number
+    rawLine: string
+    sourceLineIndex: number
+    wrapLines: boolean
+    matchRanges: Match[]
+    currentMatch: Match | null
+    isCurrentLine: boolean
+    animatedLineIndicesRef: React.MutableRefObject<Set<number>>
+    animationOrderRef: React.MutableRefObject<Map<number, number>>
+    nextAnimationOrderRef: React.MutableRefObject<number>
+}
+
 const HScrollScroller = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
     ({ style, ...props }, ref) => <div ref={ref} style={{ ...style, overflowX: "auto" }} {...props} />,
 )
@@ -32,6 +47,62 @@ const MinWidthList = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLD
 )
 
 const hScrollComponents = { Scroller: HScrollScroller, List: MinWidthList }
+const MAX_LOG_LINE_ANIMATION_DELAY_MS = 300
+const LOG_LINE_ANIMATION_DURATION_MS = 500
+
+const LogLineRow = ({
+    animationEpoch,
+    lineHeight,
+    rawLine,
+    sourceLineIndex,
+    wrapLines,
+    matchRanges,
+    currentMatch,
+    isCurrentLine,
+    animatedLineIndicesRef,
+    animationOrderRef,
+    nextAnimationOrderRef,
+}: LogLineRowProps) => {
+    const shouldAnimate = !animatedLineIndicesRef.current.has(sourceLineIndex)
+    if (shouldAnimate && !animationOrderRef.current.has(sourceLineIndex)) {
+        animationOrderRef.current.set(sourceLineIndex, nextAnimationOrderRef.current)
+        nextAnimationOrderRef.current += 1
+    }
+    const animationOrder = animationOrderRef.current.get(sourceLineIndex) ?? 0
+    const animationDelayMs = Math.min(animationOrder * 15, MAX_LOG_LINE_ANIMATION_DELAY_MS)
+
+    useEffect(() => {
+        if (!shouldAnimate) return
+
+        const markAnimatedTimer = window.setTimeout(() => {
+            animatedLineIndicesRef.current.add(sourceLineIndex)
+            animationOrderRef.current.delete(sourceLineIndex)
+        }, animationDelayMs + LOG_LINE_ANIMATION_DURATION_MS)
+
+        return () => window.clearTimeout(markAnimatedTimer)
+    }, [animatedLineIndicesRef, animationDelayMs, animationEpoch, animationOrderRef, shouldAnimate, sourceLineIndex])
+
+    return (
+        <div
+            className={`log-line flex gap-3 px-4 ${shouldAnimate ? "log-line-animate" : ""}`}
+            style={{
+                ...(wrapLines ? { minHeight: lineHeight } : { height: lineHeight }),
+                lineHeight: `${lineHeight}px`,
+                fontFamily: "var(--font-mono)",
+                fontSize: 12,
+                whiteSpace: wrapLines ? "pre-wrap" : "pre",
+                animationDelay: shouldAnimate ? `${animationDelayMs}ms` : undefined,
+            }}
+        >
+            <span className="shrink-0 select-none text-muted-foreground/40 tabular-nums">
+                {String(sourceLineIndex + 1).padStart(3, " ")}
+            </span>
+            <span className="min-w-0 break-all text-log-text">
+                {renderLineWithAnsiAndHighlights(rawLine, matchRanges, currentMatch, isCurrentLine)}
+            </span>
+        </div>
+    )
+}
 
 function extractUrls(lines: string[], preferredUrl?: string) {
     const urls = new Set<string>()
@@ -48,6 +119,7 @@ function extractUrls(lines: string[], preferredUrl?: string) {
 export const OutputPanel = ({
     procId,
     procName,
+    theme,
     lines,
     matches,
     filteredIndices,
@@ -62,8 +134,14 @@ export const OutputPanel = ({
     const [wrapLines, setWrapLines] = useState(false)
     const currentMatch = matches[currentMatchIndex] ?? null
     const detectedUrls = useMemo(() => extractUrls(lines, openUrl), [lines, openUrl])
+    const animatedLineIndicesRef = useRef<Set<number>>(new Set())
+    const animationOrderRef = useRef<Map<number, number>>(new Map())
+    const nextAnimationOrderRef = useRef(0)
+    const prevLineCountRef = useRef(0)
+    const [animationEpoch, setAnimationEpoch] = useState(0)
 
     const displayLength = filterLines ? filteredIndices.length : lines.length
+    const initialTopMostItemIndex = Math.max(displayLength - 1, 0)
     const getSourceLineIndex = useCallback(
         (displayIndex: number) => (filterLines ? filteredIndices[displayIndex] : displayIndex),
         [filterLines, filteredIndices],
@@ -71,7 +149,31 @@ export const OutputPanel = ({
 
     useEffect(() => {
         setWrapLines(false)
+        animatedLineIndicesRef.current = new Set()
+        animationOrderRef.current = new Map()
+        nextAnimationOrderRef.current = 0
+        prevLineCountRef.current = 0
+        setAnimationEpoch((value) => value + 1)
     }, [procId])
+
+    useEffect(() => {
+        if (theme === "cozy") {
+            animatedLineIndicesRef.current = new Set()
+            animationOrderRef.current = new Map()
+            nextAnimationOrderRef.current = 0
+            setAnimationEpoch((value) => value + 1)
+        }
+    }, [theme])
+
+    useEffect(() => {
+        if (lines.length < prevLineCountRef.current) {
+            animatedLineIndicesRef.current = new Set()
+            animationOrderRef.current = new Map()
+            nextAnimationOrderRef.current = 0
+            setAnimationEpoch((value) => value + 1)
+        }
+        prevLineCountRef.current = lines.length
+    }, [lines.length])
 
     const maxLineWidth = useMemo(() => {
         if (wrapLines) return 0
@@ -118,25 +220,21 @@ export const OutputPanel = ({
         const rawLine = lines[sourceLineIndex] ?? ""
         const lineMatches = matches.filter((match) => match.lineIndex === sourceLineIndex)
         const isCurrentLine = currentMatch != null && currentMatch.lineIndex === sourceLineIndex
-
         return (
-            <div
-                className="log-line flex gap-3 px-4"
-                style={{
-                    ...(wrapLines ? { minHeight: LINE_HEIGHT } : { height: LINE_HEIGHT }),
-                    lineHeight: `${LINE_HEIGHT}px`,
-                    fontFamily: "var(--font-mono)",
-                    fontSize: 12,
-                    whiteSpace: wrapLines ? "pre-wrap" : "pre",
-                }}
-            >
-                <span className="shrink-0 select-none text-muted-foreground/40 tabular-nums">
-                    {String(sourceLineIndex + 1).padStart(3, " ")}
-                </span>
-                <span className="min-w-0 break-all text-log-text">
-                    {renderLineWithAnsiAndHighlights(rawLine, lineMatches, currentMatch, isCurrentLine)}
-                </span>
-            </div>
+            <LogLineRow
+                key={`${animationEpoch}-${sourceLineIndex}`}
+                animationEpoch={animationEpoch}
+                lineHeight={LINE_HEIGHT}
+                rawLine={rawLine}
+                sourceLineIndex={sourceLineIndex}
+                wrapLines={wrapLines}
+                matchRanges={lineMatches}
+                currentMatch={currentMatch}
+                isCurrentLine={isCurrentLine}
+                animatedLineIndicesRef={animatedLineIndicesRef}
+                animationOrderRef={animationOrderRef}
+                nextAnimationOrderRef={nextAnimationOrderRef}
+            />
         )
     }
 
@@ -196,25 +294,27 @@ export const OutputPanel = ({
                     No output yet.
                 </div>
             ) : (
-                <div className="log-lines-enter flex-1 min-h-0 bg-log-bg py-4">
+                <div className="flex-1 min-h-0 bg-log-bg py-4">
                     {wrapLines ? (
                         <Virtuoso
-                            key="wrap"
+                            key={`wrap-${procId ?? "none"}-${theme}`}
                             ref={virtuosoRef}
                             style={{ height: "100%" }}
                             totalCount={displayLength}
+                            initialTopMostItemIndex={initialTopMostItemIndex}
                             itemContent={itemContent}
-                            followOutput="smooth"
+                            followOutput="auto"
                         />
                     ) : (
                         <Virtuoso
-                            key="nowrap"
+                            key={`nowrap-${procId ?? "none"}-${theme}`}
                             ref={virtuosoRef}
                             style={{ height: "100%" }}
                             totalCount={displayLength}
+                            initialTopMostItemIndex={initialTopMostItemIndex}
                             itemContent={itemContent}
                             fixedItemHeight={LINE_HEIGHT}
-                            followOutput="smooth"
+                            followOutput="auto"
                             components={hScrollComponents}
                             context={{ minWidth: maxLineWidth }}
                         />

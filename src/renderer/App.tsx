@@ -233,7 +233,6 @@ export default function App() {
     if (!config) {
         return (
             <div data-theme={theme} className={`flex h-screen w-full flex-1 min-h-0 ${theme === "cozy" ? "cozy-bg" : ""}`}>
-                {theme === "cozy" ? <div aria-hidden="true" className="cozy-bg-layer" /> : null}
                 <div className="flex-1 flex items-center justify-center text-muted-foreground">
                     <button
                         onClick={openConfig}
@@ -248,7 +247,6 @@ export default function App() {
 
     return (
         <div data-theme={theme} className={`flex h-screen w-full flex-1 min-h-0 flex-col ${theme === "cozy" ? "cozy-bg" : ""}`}>
-            {theme === "cozy" ? <div aria-hidden="true" className="cozy-bg-layer" /> : null}
             {updateReadyVersion ? (
                 <div className="relative z-10 shrink-0 flex items-center justify-between gap-4 border-b border-primary/40 bg-primary/20 px-4 py-2 text-sm text-foreground">
                     <span>Update v{updateReadyVersion} ready</span>
@@ -271,7 +269,6 @@ export default function App() {
                 </div>
             ) : null}
             <div className="relative z-10 flex flex-1 min-h-0 overflow-hidden">
-                {theme === "cozy" ? <div aria-hidden="true" className="cozy-pane-bg" /> : null}
                 <ProcessList
                     procs={config.procs}
                     selectedProcId={selectedProcId}
@@ -287,6 +284,7 @@ export default function App() {
                     <OutputPanel
                         procId={selectedProcId}
                         procName={config.procs.find((p) => p.id === selectedProcId)?.name ?? ""}
+                        theme={theme}
                         status={config.procs.find((p) => p.id === selectedProcId)?.status}
                         exitCode={config.procs.find((p) => p.id === selectedProcId)?.exitCode}
                         openUrl={config.procs.find((p) => p.id === selectedProcId)?.openUrl}

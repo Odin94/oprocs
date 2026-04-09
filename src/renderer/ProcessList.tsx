@@ -111,7 +111,7 @@ export const ProcessList = ({
               tabIndex={0}
               className={`cozy-sidebar-card group cursor-pointer rounded-lg px-3 py-2.5 transition-all ${
                 selectedProcId === proc.id
-                  ? "bg-surface-active cozy-sidebar-card-active"
+                  ? "bg-surface-active"
                   : "hover:bg-surface-hover"
               }`}
               onClick={() => onSelect(proc.id)}
