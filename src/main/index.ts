@@ -1,5 +1,6 @@
 import { app, BrowserWindow, Menu } from "electron"
 import path from "path"
+import os from "os"
 import { ProcessManager } from "./processManager.js"
 import { setupIpc } from "./ipc.js"
 import { setupUpdater } from "./updater.js"
@@ -11,13 +12,31 @@ if (process.argv.includes("init-config")) {
     process.exit(0)
 }
 
+/**
+ * Parses an optional positional directory argument from the command line.
+ * e.g. `oprocs ~/repos/my_repo` → returns the resolved absolute path.
+ * Ignores flags (starting with `-`), known commands, and internal script paths.
+ */
+function parseDirectoryArg(): string | undefined {
+    const knownCommands = new Set(["init-config"])
+    for (const arg of process.argv.slice(1)) {
+        if (arg.startsWith("-")) continue
+        if (knownCommands.has(arg)) continue
+        // Skip the electron main script itself in dev mode (ends in .js/.cjs/.mjs)
+        if (/\.(js|cjs|mjs)$/.test(arg)) continue
+        const expanded = arg.startsWith("~") ? path.join(os.homedir(), arg.slice(1)) : arg
+        return path.resolve(expanded)
+    }
+    return undefined
+}
+
 const appConfig = loadAppConfig()
 if (appConfig.quiet) setQuiet(true)
 
 const isDev = process.env.NODE_ENV === "development" || !app.isPackaged
 
 const pm = new ProcessManager(appConfig)
-setupIpc(pm)
+setupIpc(pm, { startDir: parseDirectoryArg() })
 
 const createWindow = () => {
     const win = new BrowserWindow({

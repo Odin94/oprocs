@@ -8,16 +8,19 @@ import { log } from "./logger.js"
 
 const noWinCmdRewrite = process.argv.includes("--no-cmd-rewrite")
 
-export const setupIpc = (pm: ProcessManager) => {
+export const setupIpc = (pm: ProcessManager, options?: { startDir?: string }) => {
     let currentConfigPath: string | null = null
     let currentConfigDir: string | null = null
 
     ipcMain.handle("get-default-config-path", async () => {
         const possibleFileNames = ["oprocs.yaml", "oprocs.yml", "mprocs.yaml", "mprocs.yml"]
+        const searchDirs = options?.startDir ? [options.startDir] : [process.cwd()]
 
-        for (const fileName of possibleFileNames) {
-            const filePath = path.join(process.cwd(), fileName)
-            if (fs.existsSync(filePath)) return filePath
+        for (const dir of searchDirs) {
+            for (const fileName of possibleFileNames) {
+                const filePath = path.join(dir, fileName)
+                if (fs.existsSync(filePath)) return filePath
+            }
         }
 
         return null
