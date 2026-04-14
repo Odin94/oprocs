@@ -23,6 +23,15 @@ Built installers go to `release/<version>/`. The app auto-updates from [GitHub R
 
 For publishing a release, see [RELEASING.md](./RELEASING.md).
 
+On MacOS, move oprocs into your applications and alias oprocs to run "open /Applications/oprocs.app --args $PWD"
+```fish
+# ~/.config/fish/config.fish
+function oprocs
+    /Applications/oprocs.app/Contents/MacOS/oprocs $PWD >/dev/null 2>&1 &
+    disown
+end
+```
+
 ## Config format
 
 Same as mprocs: `procs` map with entries that have either `shell` or `cmd`, plus optional `cwd`, `env`, `add_path`, `autostart`, `autorestart`, `stop`. `<CONFIG_DIR>` in paths is replaced with the config file directory.
