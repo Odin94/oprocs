@@ -72,7 +72,7 @@ export const ProcessList = ({
     <aside className="cozy-sidebar-shell flex h-full w-64 flex-col border-r border-border bg-card">
       <div className="cozy-sidebar-section flex items-center justify-between border-b border-border px-4 py-3">
         <h1 className="text-sm font-semibold tracking-wide text-foreground">
-          oprocs
+          {theme === "cozy" ? "✨ oprocs" : "oprocs"}
         </h1>
         <button
           type="button"

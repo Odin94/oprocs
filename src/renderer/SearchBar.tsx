@@ -54,10 +54,24 @@ export const SearchBar = ({
 }: SearchBarProps) => {
     const [localQuery, setLocalQuery] = useState(query)
     const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+    const inputRef = useRef<HTMLInputElement | null>(null)
 
     useEffect(() => {
         setLocalQuery(query)
     }, [query])
+
+    useEffect(() => {
+        const handleFindShortcut = (event: KeyboardEvent) => {
+            if (event.key.toLowerCase() !== "f" || (!event.ctrlKey && !event.metaKey)) return
+
+            event.preventDefault()
+            inputRef.current?.focus()
+            inputRef.current?.select()
+        }
+
+        window.addEventListener("keydown", handleFindShortcut)
+        return () => window.removeEventListener("keydown", handleFindShortcut)
+    }, [])
 
     const handleQueryChange = (value: string) => {
         setLocalQuery(value)
@@ -74,6 +88,7 @@ export const SearchBar = ({
             <div className="relative min-w-[180px] flex-1">
                 <SearchIcon className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                 <input
+                    ref={inputRef}
                     type="text"
                     className="h-8 w-full rounded-md border border-border bg-background pl-8 pr-3 font-mono text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
                     placeholder="Search logs..."

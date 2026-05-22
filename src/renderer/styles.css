@@ -34,6 +34,9 @@
         --log-bg: 228 14% 6%;
         --log-text: 220 10% 72%;
         --log-highlight: 217 92% 60%;
+        --log-scrollbar-track: 228 18% 9%;
+        --log-scrollbar-thumb: 217 92% 60%;
+        --log-scrollbar-thumb-hover: 142 72% 50%;
         --status-running: 142 72% 50%;
         --status-stopped: 0 72% 55%;
         --status-idle: 220 10% 40%;
@@ -80,6 +83,9 @@
         --log-bg: 30 40% 97%;
         --log-text: 340 15% 35%;
         --log-highlight: 330 65% 65%;
+        --log-scrollbar-track: 30 36% 90%;
+        --log-scrollbar-thumb: 330 55% 72%;
+        --log-scrollbar-thumb-hover: 200 58% 67%;
         --status-running: 155 55% 55%;
         --status-stopped: 0 55% 65%;
         --status-idle: 340 10% 70%;
@@ -315,6 +321,11 @@
         font-family: var(--font-mono);
     }
 
+    .scrollbar-thin {
+        scrollbar-width: thin;
+        scrollbar-color: hsl(var(--border)) transparent;
+    }
+
     .scrollbar-thin::-webkit-scrollbar {
         width: 6px;
         height: 6px;
@@ -331,6 +342,35 @@
 
     .scrollbar-thin::-webkit-scrollbar-thumb:hover {
         background: hsl(var(--muted-foreground));
+    }
+
+    .log-scrollbar {
+        scrollbar-width: thin;
+        scrollbar-color: hsl(var(--log-scrollbar-thumb)) hsl(var(--log-scrollbar-track));
+    }
+
+    .log-scrollbar::-webkit-scrollbar {
+        width: 12px;
+        height: 12px;
+    }
+
+    .log-scrollbar::-webkit-scrollbar-track {
+        background: hsl(var(--log-scrollbar-track));
+        border-radius: 9999px;
+    }
+
+    .log-scrollbar::-webkit-scrollbar-thumb {
+        background: linear-gradient(180deg, hsl(var(--log-scrollbar-thumb)), hsl(var(--log-scrollbar-thumb) / 0.82));
+        border: 2px solid hsl(var(--log-scrollbar-track));
+        border-radius: 9999px;
+    }
+
+    .log-scrollbar::-webkit-scrollbar-thumb:hover {
+        background: linear-gradient(180deg, hsl(var(--log-scrollbar-thumb-hover)), hsl(var(--log-scrollbar-thumb)));
+    }
+
+    .log-scrollbar::-webkit-scrollbar-corner {
+        background: hsl(var(--log-scrollbar-track));
     }
 }
 

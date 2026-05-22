@@ -98,6 +98,15 @@ export class ProcessManager {
         this.configDir = dir
     }
 
+    private finalizeStoppedProc(state: ProcState, procId: string, code: number | null) {
+        state.proc = null
+        state.effectivePid = undefined
+        state.pidsForLock = undefined
+        state.userRequestedStop = false
+        this.persistLock()
+        this.listeners.stopped({ procId, code })
+    }
+
     private resolveLogDir(configDir: string): string {
         if (this.appConfig.logs_dir) {
             return resolvePathTemplate(this.appConfig.logs_dir, path.basename(configDir))
@@ -466,13 +475,10 @@ export class ProcessManager {
             state.logStream?.end()
             state.logStream = null
             const wasUserStop = state.userRequestedStop
-            state.userRequestedStop = false
-            if (state.effectivePid != null) {
+            if (state.effectivePid != null && !wasUserStop && this.isPidAlive(state.effectivePid)) {
                 state.proc = { pid: state.effectivePid }
             } else {
-                state.proc = null
-                this.persistLock()
-                this.listeners.stopped({ procId, code: code ?? null })
+                this.finalizeStoppedProc(state, procId, code ?? null)
                 if (!wasUserStop) {
                     const uptime = (Date.now() - state.startTime) / 1000
                     if (config.autorestart && uptime > 1) {
@@ -503,7 +509,7 @@ export class ProcessManager {
         state.userRequestedStop = true
         const rootPid = handle.pid
         if (rootPid == null) {
-            if (!options?.skipPersistLock) this.persistLock()
+            this.finalizeStoppedProc(state, procId, null)
             return { ok: true }
         }
 
@@ -521,10 +527,8 @@ export class ProcessManager {
         }
 
         if (!isSpawnedHandle(handle)) {
-            state.proc = null
-            state.effectivePid = undefined
-            state.pidsForLock = undefined
-            this.listeners.stopped({ procId, code: null })
+            this.finalizeStoppedProc(state, procId, null)
+            return { ok: true }
         }
         if (!options?.skipPersistLock) this.persistLock()
         return { ok: true }
@@ -583,11 +587,7 @@ export class ProcessManager {
         if (pid == null) return false
         if (isSpawnedHandle(state.proc)) return true
         if (this.isPidAlive(pid)) return true
-        state.proc = null
-        state.effectivePid = undefined
-        state.pidsForLock = undefined
-        this.persistLock()
-        this.listeners.stopped({ procId, code: null })
+        this.finalizeStoppedProc(state, procId, null)
         return false
     }
 
@@ -639,3 +639,5 @@ export class ProcessManager {
         })
     }
 }
+
+

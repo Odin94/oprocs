@@ -1,11 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso"
-import { ExternalLinkIcon, WrapTextIcon } from "./icons"
-import { parseAnsiToSegments, withoutAnsiColors } from "./utils/ansi"
+import { CheckIcon, CopyIcon, ExternalLinkIcon, WrapTextIcon } from "./icons"
+import { parseAnsiToSegments, withoutAnsiColors, type AnsiSegment } from "./utils/ansi"
+import { extractUrls, findUrlMatches } from "./utils/links"
 
 const LINE_HEIGHT = 20
 const CHAR_WIDTH = 7.8
-const URL_REGEX = /https?:\/\/[^\s'",)}\]>]+/g
 
 export type Match = { lineIndex: number; start: number; end: number }
 
@@ -38,14 +38,31 @@ type LogLineRowProps = {
     nextAnimationOrderRef: React.MutableRefObject<number>
 }
 
+type OffsetSegment = AnsiSegment & {
+    start: number
+    end: number
+}
+
+const LogScroller = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
+    ({ className, ...props }, ref) => <div ref={ref} className={["log-scrollbar", className].filter(Boolean).join(" ")} {...props} />,
+)
+
 const HScrollScroller = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
-    ({ style, ...props }, ref) => <div ref={ref} style={{ ...style, overflowX: "auto" }} {...props} />,
+    ({ style, className, ...props }, ref) => (
+        <div
+            ref={ref}
+            className={["log-scrollbar", className].filter(Boolean).join(" ")}
+            style={{ ...style, overflowX: "auto" }}
+            {...props}
+        />
+    ),
 )
 
 const MinWidthList = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement> & { context?: { minWidth: number } }>(
     ({ style, context, ...props }, ref) => <div ref={ref} style={{ ...style, minWidth: context?.minWidth }} {...props} />,
 )
 
+const wrapComponents = { Scroller: LogScroller }
 const hScrollComponents = { Scroller: HScrollScroller, List: MinWidthList }
 const MAX_LOG_LINE_ANIMATION_DELAY_MS = 300
 const LOG_LINE_ANIMATION_DURATION_MS = 500
@@ -104,18 +121,6 @@ const LogLineRow = ({
     )
 }
 
-function extractUrls(lines: string[], preferredUrl?: string) {
-    const urls = new Set<string>()
-    if (preferredUrl) urls.add(preferredUrl)
-    for (const line of lines) {
-        const matches = line.match(URL_REGEX)
-        if (!matches) continue
-        for (const url of matches) urls.add(url)
-        if (urls.size >= 3) break
-    }
-    return Array.from(urls).slice(0, 3)
-}
-
 export const OutputPanel = ({
     procId,
     procName,
@@ -132,6 +137,16 @@ export const OutputPanel = ({
 }: OutputPanelProps) => {
     const virtuosoRef = useRef<VirtuosoHandle>(null)
     const [wrapLines, setWrapLines] = useState(false)
+    const [copied, setCopied] = useState(false)
+
+    const copyLogs = useCallback(() => {
+        const displayedLines = filterLines ? filteredIndices.map((i) => lines[i] ?? "") : lines
+        const text = displayedLines.map((l) => withoutAnsiColors(l)).join("\n")
+        void navigator.clipboard.writeText(text).then(() => {
+            setCopied(true)
+            window.setTimeout(() => setCopied(false), 1500)
+        })
+    }, [filterLines, filteredIndices, lines])
     const currentMatch = matches[currentMatchIndex] ?? null
     const detectedUrls = useMemo(() => extractUrls(lines, openUrl), [lines, openUrl])
     const animatedLineIndicesRef = useRef<Set<number>>(new Set())
@@ -273,7 +288,19 @@ export const OutputPanel = ({
                     </div>
                 ) : null}
                 <div className="flex-1" />
-                <span className="font-mono text-xs text-muted-foreground">{lines.length} lines</span>
+                <button
+                    type="button"
+                    onClick={copyLogs}
+                    className={`flex items-center gap-1 rounded-md border px-2 py-1 text-xs transition-colors ${
+                        copied
+                            ? "border-accent bg-accent/20 text-accent"
+                            : "border-border text-muted-foreground hover:bg-surface-hover hover:text-foreground"
+                    }`}
+                    title="Copy logs to clipboard"
+                >
+                    {copied ? <CheckIcon className="h-3.5 w-3.5" /> : <CopyIcon className="h-3.5 w-3.5" />}
+                    {copied ? "Copied!" : "Copy"}
+                </button>
                 <button
                     type="button"
                     onClick={() => setWrapLines((value) => !value)}
@@ -304,6 +331,7 @@ export const OutputPanel = ({
                             initialTopMostItemIndex={initialTopMostItemIndex}
                             itemContent={itemContent}
                             followOutput="auto"
+                            components={wrapComponents}
                         />
                     ) : (
                         <Virtuoso
@@ -331,88 +359,104 @@ const renderLineWithAnsiAndHighlights = (
     currentMatch: Match | null,
     isCurrentLine: boolean,
 ): React.ReactNode => {
-    const segments = parseAnsiToSegments(rawLine)
+    const segments = withSegmentOffsets(parseAnsiToSegments(rawLine))
+    const urlMatches = findUrlMatches(rawLine)
+    const plainLength = withoutAnsiColors(rawLine).length
+    const boundaries = new Set<number>([0, plainLength])
+
+    for (const match of matchRanges) {
+        boundaries.add(match.start)
+        boundaries.add(match.end)
+    }
+
+    for (const match of urlMatches) {
+        boundaries.add(match.start)
+        boundaries.add(match.end)
+    }
+
+    const sortedBoundaries = Array.from(boundaries).sort((a, b) => a - b)
+
+    return (
+        <>
+            {sortedBoundaries.slice(0, -1).map((start, index) => {
+                const end = sortedBoundaries[index + 1]
+                if (start === end) return null
+
+                const content = renderStyledSlice(segments, start, end)
+                const matchedRange = matchRanges.find((match) => match.start <= start && match.end >= end)
+                const urlMatch = urlMatches.find((match) => match.start <= start && match.end >= end)
+
+                const highlightedContent =
+                    matchedRange != null ? (
+                        <mark
+                            className={
+                                isCurrentLine &&
+                                currentMatch &&
+                                currentMatch.start === matchedRange.start &&
+                                currentMatch.end === matchedRange.end
+                                    ? "rounded-sm bg-log-highlight/30 px-0.5 text-accent-foreground"
+                                    : "rounded-sm bg-surface-active px-0.5 text-foreground"
+                            }
+                        >
+                            {content}
+                        </mark>
+                    ) : (
+                        content
+                    )
+
+                if (!urlMatch) return <React.Fragment key={index}>{highlightedContent}</React.Fragment>
+
+                return (
+                    <button
+                        key={index}
+                        type="button"
+                        onClick={() => void window.electronAPI?.openExternalLink(urlMatch.url)}
+                        className="inline cursor-pointer rounded-sm underline decoration-accent/40 underline-offset-2 transition-colors hover:text-accent hover:decoration-accent"
+                        title={urlMatch.url}
+                    >
+                        {highlightedContent}
+                    </button>
+                )
+            })}
+        </>
+    )
+}
+
+const withSegmentOffsets = (segments: AnsiSegment[]): OffsetSegment[] => {
     let plainOffset = 0
+    return segments.map((segment) => {
+        const withOffsets = {
+            ...segment,
+            start: plainOffset,
+            end: plainOffset + segment.text.length,
+        }
+        plainOffset = withOffsets.end
+        return withOffsets
+    })
+}
+
+const renderStyledSlice = (segments: OffsetSegment[], start: number, end: number): React.ReactNode => {
     const parts: React.ReactNode[] = []
 
     for (const seg of segments) {
-        const segStart = plainOffset
-        const segEnd = plainOffset + seg.text.length
-        plainOffset = segEnd
+        const sliceStart = Math.max(start, seg.start)
+        const sliceEnd = Math.min(end, seg.end)
+        if (sliceStart >= sliceEnd) continue
 
-        const overlapping = matchRanges.filter((match) => match.end > segStart && match.start < segEnd)
-        if (overlapping.length === 0) {
-            parts.push(
-                <span
-                    key={parts.length}
-                    style={{
-                        color: seg.fg,
-                        backgroundColor: seg.bg,
-                        fontWeight: seg.bold ? "bold" : undefined,
-                        opacity: seg.dim ? 0.7 : undefined,
-                        fontStyle: seg.italic ? "italic" : undefined,
-                    }}
-                >
-                    {seg.text}
-                </span>,
-            )
-            continue
-        }
-
-        let pos = segStart
-        const sorted = [...overlapping].sort((a, b) => a.start - b.start)
-        for (const match of sorted) {
-            const matchStart = Math.max(match.start, pos)
-            const matchEnd = Math.min(match.end, segEnd)
-            if (matchStart >= matchEnd) continue
-            if (matchStart > pos) {
-                parts.push(
-                    <span
-                        key={parts.length}
-                        style={{
-                            color: seg.fg,
-                            backgroundColor: seg.bg,
-                            fontWeight: seg.bold ? "bold" : undefined,
-                            opacity: seg.dim ? 0.7 : undefined,
-                            fontStyle: seg.italic ? "italic" : undefined,
-                        }}
-                    >
-                        {seg.text.slice(pos - segStart, matchStart - segStart)}
-                    </span>,
-                )
-            }
-            const isCurrent = isCurrentLine && currentMatch && currentMatch.start === match.start && currentMatch.end === match.end
-            parts.push(
-                <mark
-                    key={parts.length}
-                    className={
-                        isCurrent
-                            ? "rounded-sm bg-log-highlight/30 px-0.5 text-accent-foreground"
-                            : "rounded-sm bg-surface-active px-0.5 text-foreground"
-                    }
-                >
-                    {seg.text.slice(matchStart - segStart, matchEnd - segStart)}
-                </mark>,
-            )
-            pos = matchEnd
-        }
-        if (pos < segEnd) {
-            parts.push(
-                <span
-                    key={parts.length}
-                    style={{
-                        color: seg.fg,
-                        backgroundColor: seg.bg,
-                        fontWeight: seg.bold ? "bold" : undefined,
-                        opacity: seg.dim ? 0.7 : undefined,
-                        fontStyle: seg.italic ? "italic" : undefined,
-                    }}
-                >
-                    {seg.text.slice(pos - segStart, segEnd - segStart)}
-                </span>,
-            )
-        }
+        parts.push(
+            <span key={parts.length} style={getAnsiSegmentStyle(seg)}>
+                {seg.text.slice(sliceStart - seg.start, sliceEnd - seg.start)}
+            </span>,
+        )
     }
 
     return <>{parts}</>
 }
+
+const getAnsiSegmentStyle = (seg: AnsiSegment): React.CSSProperties => ({
+    color: seg.fg,
+    backgroundColor: seg.bg,
+    fontWeight: seg.bold ? "bold" : undefined,
+    opacity: seg.dim ? 0.7 : undefined,
+    fontStyle: seg.italic ? "italic" : undefined,
+})

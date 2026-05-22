@@ -119,6 +119,15 @@ export const TerminalIcon = icon(
 
 export const PlayIcon = icon(<path d="m8 5 11 7-11 7V5Z" />)
 
+export const CopyIcon = icon(
+    <>
+        <rect x="9" y="9" width="13" height="13" rx="2" />
+        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+    </>,
+)
+
+export const CheckIcon = icon(<path d="M20 6 9 17l-5-5" />)
+
 export const WrapTextIcon = icon(
     <>
         <path d="M4 6h12a4 4 0 0 1 0 8H9" />
