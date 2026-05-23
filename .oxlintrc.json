@@ -1,0 +1,21 @@
+{
+    "$schema": "./node_modules/oxlint/configuration_schema.json",
+    "plugins": ["typescript", "unicorn", "oxc", "react", "vitest"],
+    "categories": {
+        "correctness": "error"
+    },
+    "ignorePatterns": ["out/**", "release/**", "oprocs/**"],
+    "rules": {},
+    "env": {
+        "browser": true,
+        "builtin": true,
+        "es2022": true,
+        "node": true,
+        "vitest": true
+    },
+    "settings": {
+        "react": {
+            "version": "19.2.6"
+        }
+    }
+}

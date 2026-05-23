@@ -44,7 +44,9 @@ type OffsetSegment = AnsiSegment & {
 }
 
 const LogScroller = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
-    ({ className, ...props }, ref) => <div ref={ref} className={["log-scrollbar", className].filter(Boolean).join(" ")} {...props} />,
+    ({ className, ...props }, ref) => (
+        <div ref={ref} className={["log-scrollbar", className].filter(Boolean).join(" ")} {...props} />
+    ),
 )
 
 const HScrollScroller = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
@@ -58,9 +60,10 @@ const HScrollScroller = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HT
     ),
 )
 
-const MinWidthList = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement> & { context?: { minWidth: number } }>(
-    ({ style, context, ...props }, ref) => <div ref={ref} style={{ ...style, minWidth: context?.minWidth }} {...props} />,
-)
+const MinWidthList = React.forwardRef<
+    HTMLDivElement,
+    React.HTMLAttributes<HTMLDivElement> & { context?: { minWidth: number } }
+>(({ style, context, ...props }, ref) => <div ref={ref} style={{ ...style, minWidth: context?.minWidth }} {...props} />)
 
 const wrapComponents = { Scroller: LogScroller }
 const hScrollComponents = { Scroller: HScrollScroller, List: MinWidthList }
@@ -111,7 +114,7 @@ const LogLineRow = ({
                 animationDelay: shouldAnimate ? `${animationDelayMs}ms` : undefined,
             }}
         >
-            <span className="shrink-0 select-none text-muted-foreground/40 tabular-nums">
+            <span className="shrink-0 select-none tabular-nums text-muted-foreground/40">
                 {String(sourceLineIndex + 1).padStart(3, " ")}
             </span>
             <span className="min-w-0 break-all text-log-text">
@@ -254,13 +257,13 @@ export const OutputPanel = ({
     }
 
     return (
-        <div className="flex flex-1 min-h-0 min-w-0 flex-col">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
             <div className="flex items-center gap-2 border-b border-border bg-card px-4 py-2">
                 <div className="flex min-w-0 items-center gap-1.5">
                     <span
                         className={`inline-block h-2 w-2 rounded-full ${
                             status === "running"
-                                ? "bg-status-running animate-pulse-dot"
+                                ? "animate-pulse-dot bg-status-running"
                                 : exitCode != null && exitCode !== 0
                                   ? "bg-status-stopped"
                                   : "bg-status-idle"
@@ -317,11 +320,11 @@ export const OutputPanel = ({
             </div>
             {toolbar}
             {displayLength === 0 ? (
-                <div className="flex-1 overflow-auto bg-log-bg py-8 px-4 text-center font-mono text-[13px] text-muted-foreground">
+                <div className="flex-1 overflow-auto bg-log-bg px-4 py-8 text-center font-mono text-[13px] text-muted-foreground">
                     No output yet.
                 </div>
             ) : (
-                <div className="flex-1 min-h-0 bg-log-bg py-4">
+                <div className="min-h-0 flex-1 bg-log-bg py-4">
                     {wrapLines ? (
                         <Virtuoso
                             key={`wrap-${procId ?? "none"}-${theme}`}

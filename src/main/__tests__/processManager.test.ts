@@ -4,24 +4,32 @@ import { ProcessManager, withWindowsUtf8CmdArgs, withWindowsUtf8Shell } from "..
 
 describe("Windows UTF-8 process wrapping", () => {
     it("prepends chcp for cmd shell commands", () => {
-        expect(withWindowsUtf8Shell("echo הצü", "cmd.exe")).toBe("chcp 65001>nul && echo הצü")
+        expect(withWindowsUtf8Shell("echo \u00e4\u00f6\u00fc", "cmd.exe")).toBe(
+            "chcp 65001>nul && echo \u00e4\u00f6\u00fc",
+        )
     })
 
     it("prepends encoding setup for powershell shell commands", () => {
-        expect(withWindowsUtf8Shell("Write-Output 'הצü'", "powershell.exe")).toContain("[Console]::OutputEncoding")
+        expect(withWindowsUtf8Shell("Write-Output '\u00e4\u00f6\u00fc'", "powershell.exe")).toContain(
+            "[Console]::OutputEncoding",
+        )
     })
 
     it("rewrites cmd /c commands to force utf8", () => {
-        expect(withWindowsUtf8CmdArgs("cmd.exe", ["/c", "echo הצü"])).toEqual([
+        expect(withWindowsUtf8CmdArgs("cmd.exe", ["/c", "echo \u00e4\u00f6\u00fc"])).toEqual([
             "/c",
-            "chcp 65001>nul && echo הצü",
+            "chcp 65001>nul && echo \u00e4\u00f6\u00fc",
         ])
     })
 
     it("rewrites powershell -Command to force utf8", () => {
-        const out = withWindowsUtf8CmdArgs("powershell.exe", ["-NoProfile", "-Command", "Write-Output 'הצü'"])
+        const out = withWindowsUtf8CmdArgs("powershell.exe", [
+            "-NoProfile",
+            "-Command",
+            "Write-Output '\u00e4\u00f6\u00fc'",
+        ])
         expect(out[2]).toContain("[Console]::OutputEncoding")
-        expect(out[2]).toContain("Write-Output 'הצü'")
+        expect(out[2]).toContain("Write-Output '\u00e4\u00f6\u00fc'")
     })
 
     it("leaves unrelated commands unchanged", () => {
@@ -61,7 +69,17 @@ describe("stop state reconciliation", () => {
         ;(pm as unknown as { persistLock: () => void }).persistLock = () => {}
         ;(pm as unknown as { isPidAlive: (pid: number) => boolean }).isPidAlive = () => false
 
-        handle.emit("close", 0, null)
+        type TestProcState = typeof state
+        ;(
+            pm as unknown as {
+                reconcileClosedProc: (
+                    state: TestProcState,
+                    procId: string,
+                    code: number | null,
+                    config: TestProcState["config"],
+                ) => void
+            }
+        ).reconcileClosedProc(state, "api", 0, state.config)
 
         expect((pm as unknown as { procs: Map<string, typeof state> }).procs.get("api")?.proc).toBeNull()
         expect(stopped).toEqual([{ procId: "api", code: 0 }])

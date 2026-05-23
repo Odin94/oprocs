@@ -1,4 +1,5 @@
-const ANSI_RE = /[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-PR-Zcf-nqry=><]/g
+// oxlint-disable-next-line no-control-regex
+const ANSI_RE = new RegExp("[\\u001b\\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-PR-Zcf-nqry=><]", "g")
 
 export const withoutAnsiColors = (text: string) => text.replace(ANSI_RE, "")
 
@@ -81,7 +82,8 @@ export const parseAnsiToSegments = (raw: string): AnsiSegment[] => {
             italic = false
             continue
         }
-        const m = code.match(/\u001b\[([\d;]*)m/)
+        // oxlint-disable-next-line no-control-regex
+        const m = code.match(new RegExp("\\u001b\\[([\\d;]*)m"))
         if (!m) continue
         const parts = m[1].split(";").map(Number).filter(Boolean)
         for (const n of parts) {

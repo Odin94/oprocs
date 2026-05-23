@@ -13,12 +13,14 @@ const otelProvider = new LoggerProvider({
 logs.setGlobalLoggerProvider(otelProvider)
 const otelLogger = logs.getLogger("oprocs", "0.1.1")
 
-const stream = isDev ? pinoPretty({ colorize: true, translateTime: "SYS:HH:MM:ss", hideObject: true }) : pino.destination(1)
+const stream = isDev
+    ? pinoPretty({ colorize: true, translateTime: "SYS:HH:MM:ss", hideObject: true })
+    : pino.destination(1)
 const pinoLogger = pino({ level: isDev ? "debug" : "info", base: { name: "oprocs" } }, stream)
 const lockLogger = pinoLogger.child({ module: "lock" })
 
 export function setQuiet(quiet: boolean): void {
-    const level = quiet ? "silent" : (isDev ? "debug" : "info")
+    const level = quiet ? "silent" : isDev ? "debug" : "info"
     pinoLogger.level = level
     lockLogger.level = level
 }

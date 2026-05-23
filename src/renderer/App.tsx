@@ -25,10 +25,14 @@ declare global {
     interface Window {
         electronAPI?: {
             getDefaultConfigPath: () => Promise<string | null>
-            loadConfig: (
-                configPath: string,
-            ) => Promise<
-                | { configPath: string; configDir: string; procs: { id: string; name: string }[]; runningIds?: string[]; normalizedProcNames?: string[] }
+            loadConfig: (configPath: string) => Promise<
+                | {
+                      configPath: string
+                      configDir: string
+                      procs: { id: string; name: string }[]
+                      runningIds?: string[]
+                      normalizedProcNames?: string[]
+                  }
                 | { error: string }
             >
             startProc: (procId: string) => Promise<{ ok: boolean; error?: string }>
@@ -96,7 +100,9 @@ export default function App() {
             if (e.data.id !== searchIdRef.current) return
             setMatches(e.data.matches)
             setFilteredIndices(e.data.filteredLineIndices)
-            setCurrentMatchIndex((prev) => (e.data.matches.length === 0 ? 0 : Math.min(prev, e.data.matches.length - 1)))
+            setCurrentMatchIndex((prev) =>
+                e.data.matches.length === 0 ? 0 : Math.min(prev, e.data.matches.length - 1),
+            )
         }
         return () => {
             w.terminate()
@@ -137,7 +143,13 @@ export default function App() {
     }, [clearedOutputSnapshot, selectedProcId])
 
     const applyLoadedConfig = useCallback(
-        (result: { configPath: string; configDir: string; procs: { id: string; name: string }[]; runningIds?: string[]; normalizedProcNames?: string[] }) => {
+        (result: {
+            configPath: string
+            configDir: string
+            procs: { id: string; name: string }[]
+            runningIds?: string[]
+            normalizedProcNames?: string[]
+        }) => {
             const runningSet = new Set(result.runningIds ?? [])
             setConfig({
                 configPath: result.configPath,
@@ -150,8 +162,8 @@ export default function App() {
             })
             setSelectedProcId(result.procs[0]?.id ?? null)
             if (result.normalizedProcNames && result.normalizedProcNames.length > 0) {
-                toast.warning("Windows commands rewritten for Unix", {
-                    description: `cmd /c in ${result.normalizedProcNames.join(", ")} replaced with sh -c. Use --no-cmd-rewrite to disable.`,
+                toast.warning("Command compatibility rewrite applied", {
+                    description: `Adjusted command arrays in ${result.normalizedProcNames.join(", ")} for this platform. Use --no-cmd-rewrite to disable.`,
                     duration: 6000,
                 })
             }
@@ -168,7 +180,7 @@ export default function App() {
                 applyLoadedConfig(result)
             })
         })
-    }, [api, config, applyLoadedConfig])
+    }, [config, applyLoadedConfig])
 
     const ipcListenersRegistered = useRef(false)
     useEffect(() => {
@@ -180,11 +192,9 @@ export default function App() {
                 setConfig((c) =>
                     c
                         ? {
-                            ...c,
-                            procs: c.procs.map((p) =>
-                                p.id === procId && p.openUrl == null ? { ...p, openUrl } : p,
-                            ),
-                        }
+                              ...c,
+                              procs: c.procs.map((p) => (p.id === procId && p.openUrl == null ? { ...p, openUrl } : p)),
+                          }
                         : c,
                 )
             setOutputByProc((prev) => ({ ...prev, [procId]: (prev[procId] ?? "") + text }))
@@ -193,13 +203,13 @@ export default function App() {
             setConfig((c) =>
                 c
                     ? {
-                        ...c,
-                        procs: c.procs.map((p) =>
-                            p.id === procId
-                                ? { ...p, status: "running" as const, exitCode: null, openUrl: undefined }
-                                : p,
-                        ),
-                    }
+                          ...c,
+                          procs: c.procs.map((p) =>
+                              p.id === procId
+                                  ? { ...p, status: "running" as const, exitCode: null, openUrl: undefined }
+                                  : p,
+                          ),
+                      }
                     : c,
             )
         })
@@ -207,13 +217,13 @@ export default function App() {
             setConfig((c) =>
                 c
                     ? {
-                        ...c,
-                        procs: c.procs.map((p) =>
-                            p.id === procId
-                                ? { ...p, status: "stopped" as const, exitCode: code, openUrl: undefined }
-                                : p,
-                        ),
-                    }
+                          ...c,
+                          procs: c.procs.map((p) =>
+                              p.id === procId
+                                  ? { ...p, status: "stopped" as const, exitCode: code, openUrl: undefined }
+                                  : p,
+                          ),
+                      }
                     : c,
             )
         })
@@ -232,8 +242,11 @@ export default function App() {
 
     if (!config) {
         return (
-            <div data-theme={theme} className={`flex h-screen w-full flex-1 min-h-0 ${theme === "cozy" ? "cozy-bg" : ""}`}>
-                <div className="flex-1 flex items-center justify-center text-muted-foreground">
+            <div
+                data-theme={theme}
+                className={`flex h-screen min-h-0 w-full flex-1 ${theme === "cozy" ? "cozy-bg" : ""}`}
+            >
+                <div className="flex flex-1 items-center justify-center text-muted-foreground">
                     <button
                         onClick={openConfig}
                         className="rounded-md border border-border bg-card px-4 py-2 text-[13px] text-foreground transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50"
@@ -246,9 +259,12 @@ export default function App() {
     }
 
     return (
-        <div data-theme={theme} className={`flex h-screen w-full flex-1 min-h-0 flex-col ${theme === "cozy" ? "cozy-bg" : ""}`}>
+        <div
+            data-theme={theme}
+            className={`flex h-screen min-h-0 w-full flex-1 flex-col ${theme === "cozy" ? "cozy-bg" : ""}`}
+        >
             {updateReadyVersion ? (
-                <div className="relative z-10 shrink-0 flex items-center justify-between gap-4 border-b border-primary/40 bg-primary/20 px-4 py-2 text-sm text-foreground">
+                <div className="relative z-10 flex shrink-0 items-center justify-between gap-4 border-b border-primary/40 bg-primary/20 px-4 py-2 text-sm text-foreground">
                     <span>Update v{updateReadyVersion} ready</span>
                     <div className="flex gap-2">
                         <button
@@ -268,7 +284,7 @@ export default function App() {
                     </div>
                 </div>
             ) : null}
-            <div className="relative z-10 flex flex-1 min-h-0 overflow-hidden">
+            <div className="relative z-10 flex min-h-0 flex-1 overflow-hidden">
                 <ProcessList
                     procs={config.procs}
                     selectedProcId={selectedProcId}
@@ -280,7 +296,7 @@ export default function App() {
                     onToggleTheme={() => setTheme((current) => (current === "tech" ? "cozy" : "tech"))}
                     onOpenConfig={openConfig}
                 />
-                <main className="flex-1 flex flex-col min-w-0">
+                <main className="flex min-w-0 flex-1 flex-col">
                     <OutputPanel
                         procId={selectedProcId}
                         procName={config.procs.find((p) => p.id === selectedProcId)?.name ?? ""}
@@ -310,7 +326,9 @@ export default function App() {
                                 onSearch={(q) => runSearch(q)}
                                 hasOutput={!!selectedProcId && !!(outputByProc[selectedProcId] ?? "").trim()}
                                 onClearOutput={clearOutputForCurrentProc}
-                                canUndoClear={clearedOutputSnapshot !== null && clearedOutputSnapshot.procId === selectedProcId}
+                                canUndoClear={
+                                    clearedOutputSnapshot !== null && clearedOutputSnapshot.procId === selectedProcId
+                                }
                                 onUndoClear={undoClearOutput}
                             />
                         }

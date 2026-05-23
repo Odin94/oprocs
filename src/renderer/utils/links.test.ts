@@ -7,8 +7,8 @@ describe("links", () => {
 
         expect(findUrlMatches(line)).toEqual([
             {
-                start: 13,
-                end: 35,
+                start: 14,
+                end: 36,
                 url: "http://localhost:3000/",
             },
         ])

@@ -107,6 +107,22 @@ export class ProcessManager {
         this.listeners.stopped({ procId, code })
     }
 
+    private reconcileClosedProc(state: ProcState, procId: string, code: number | null, config: ProcConfig) {
+        const wasUserStop = state.userRequestedStop
+        if (state.effectivePid != null && !wasUserStop && this.isPidAlive(state.effectivePid)) {
+            state.proc = { pid: state.effectivePid }
+        } else {
+            this.finalizeStoppedProc(state, procId, code)
+            if (!wasUserStop) {
+                const uptime = (Date.now() - state.startTime) / 1000
+                if (config.autorestart && uptime > 1) {
+                    setTimeout(() => this.start(procId), 500)
+                }
+            }
+        }
+        if (state.proc != null) this.persistLock()
+    }
+
     private resolveLogDir(configDir: string): string {
         if (this.appConfig.logs_dir) {
             return resolvePathTemplate(this.appConfig.logs_dir, path.basename(configDir))
@@ -130,7 +146,8 @@ export class ProcessManager {
             process.kill(pid, 0)
             return true
         } catch (err) {
-            const code = err && typeof err === "object" && "code" in err ? (err as NodeJS.ErrnoException).code : undefined
+            const code =
+                err && typeof err === "object" && "code" in err ? (err as NodeJS.ErrnoException).code : undefined
             log.debug("isPidAlive: process.kill(pid, 0) threw pid=%s code=%s", pid, code)
             if (code === "EPERM") return true
             if (process.platform === "win32") return this.isPidAliveWindows(pid)
@@ -156,7 +173,9 @@ export class ProcessManager {
         for (const v of Object.values(lock)) {
             if (typeof v === "number" && Number.isInteger(v)) allPids.add(v)
             else if (Array.isArray(v))
-                v.filter((p): p is number => typeof p === "number" && Number.isInteger(p)).forEach((p) => allPids.add(p))
+                v.filter((p): p is number => typeof p === "number" && Number.isInteger(p)).forEach((p) =>
+                    allPids.add(p),
+                )
         }
         log.debug("killPidsFromLock: platform=%s attempting to kill %s pid(s)", process.platform, allPids.size)
         await Promise.all(
@@ -202,7 +221,9 @@ export class ProcessManager {
         return n === "cmd.exe" || n === "command.com" || n === "powershell.exe" || n === "pwsh.exe"
     }
 
-    private async collectDescendantsWindowsAsync(rootPid: number): Promise<{ pid: number; name: string; depth: number }[]> {
+    private async collectDescendantsWindowsAsync(
+        rootPid: number,
+    ): Promise<{ pid: number; name: string; depth: number }[]> {
         const out: { pid: number; name: string; depth: number }[] = []
         const walk = async (pid: number, depth: number) => {
             const children = await this.getChildPidsWindowsAsync(pid)
@@ -250,7 +271,8 @@ export class ProcessManager {
             treeKill(pid, signal, (err) => {
                 if (err) {
                     const notFound =
-                        err.message?.toLowerCase().includes("not found") || err.message?.toLowerCase().includes("no such process")
+                        err.message?.toLowerCase().includes("not found") ||
+                        err.message?.toLowerCase().includes("no such process")
                     if (notFound) {
                         log.debug("killPid: pid=%s already gone", pid)
                     } else {
@@ -276,7 +298,8 @@ export class ProcessManager {
             const out: Record<string, number[]> = {}
             for (const [k, v] of Object.entries(data)) {
                 if (typeof v === "number" && Number.isInteger(v)) out[k] = [v]
-                else if (Array.isArray(v)) out[k] = v.filter((p): p is number => typeof p === "number" && Number.isInteger(p))
+                else if (Array.isArray(v))
+                    out[k] = v.filter((p): p is number => typeof p === "number" && Number.isInteger(p))
             }
             log.debug("readLock: parsed pids", JSON.stringify(out))
             return out
@@ -373,7 +396,8 @@ export class ProcessManager {
             if (config.shell != null) {
                 const shell = process.platform === "win32" ? (process.env.ComSpec ?? "cmd.exe") : "/bin/sh"
                 const flag = process.platform === "win32" ? "/c" : "-c"
-                const shellCmd = process.platform === "win32" ? withWindowsUtf8Shell(config.shell, shell) : "exec " + config.shell
+                const shellCmd =
+                    process.platform === "win32" ? withWindowsUtf8Shell(config.shell, shell) : "exec " + config.shell
                 const spawnOpts: Parameters<typeof spawn>[2] = {
                     cwd,
                     env,
@@ -421,7 +445,8 @@ export class ProcessManager {
             process.platform === "win32" &&
             child.pid != null &&
             (config.shell != null ||
-                (config.cmd?.length && (config.cmd[0] === "cmd" || String(config.cmd[0]).toLowerCase().endsWith("cmd.exe"))))
+                (config.cmd?.length &&
+                    (config.cmd[0] === "cmd" || String(config.cmd[0]).toLowerCase().endsWith("cmd.exe"))))
         if (isWindowsCmd) {
             const rootPid = child.pid!
 
@@ -474,19 +499,7 @@ export class ProcessManager {
             }
             state.logStream?.end()
             state.logStream = null
-            const wasUserStop = state.userRequestedStop
-            if (state.effectivePid != null && !wasUserStop && this.isPidAlive(state.effectivePid)) {
-                state.proc = { pid: state.effectivePid }
-            } else {
-                this.finalizeStoppedProc(state, procId, code ?? null)
-                if (!wasUserStop) {
-                    const uptime = (Date.now() - state.startTime) / 1000
-                    if (config.autorestart && uptime > 1) {
-                        setTimeout(() => this.start(procId), 500)
-                    }
-                }
-            }
-            if (state.proc != null) this.persistLock()
+            this.reconcileClosedProc(state, procId, code ?? null, config)
         })
 
         child.on("error", (err) => {
@@ -517,7 +530,11 @@ export class ProcessManager {
         const signal = stop === "hard-kill" ? "SIGKILL" : stop
         if (process.platform === "win32") {
             const taskkillExe = path.join(process.env.SystemRoot ?? "C:\\Windows", "System32", "taskkill.exe")
-            spawnSync(taskkillExe, ["/pid", String(rootPid), "/T", "/F"], { stdio: "ignore", windowsHide: true, timeout: 5000 })
+            spawnSync(taskkillExe, ["/pid", String(rootPid), "/T", "/F"], {
+                stdio: "ignore",
+                windowsHide: true,
+                timeout: 5000,
+            })
         } else {
             try {
                 process.kill(rootPid, signal as NodeJS.Signals)
@@ -639,5 +656,3 @@ export class ProcessManager {
         })
     }
 }
-
-

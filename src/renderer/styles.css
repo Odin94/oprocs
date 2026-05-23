@@ -115,7 +115,7 @@
     }
 
     body {
-        @apply bg-background text-foreground text-sm antialiased;
+        @apply bg-background text-sm text-foreground antialiased;
         font-family: var(--font-body);
         margin: 0;
     }
@@ -220,86 +220,69 @@
     position: relative;
     isolation: isolate;
     background:
-        radial-gradient(
-            ellipse 80% 60% at 10% 20%,
-            hsl(330 65% 70% / 0.7) 0%,
-            transparent 60%
-        ),
-        radial-gradient(
-            ellipse 60% 50% at 85% 15%,
-            hsl(280 50% 70% / 0.65) 0%,
-            transparent 55%
-        ),
-        radial-gradient(
-            ellipse 50% 40% at 50% 80%,
-            hsl(200 60% 70% / 0.6) 0%,
-            transparent 50%
-        ),
-        radial-gradient(
-            ellipse 40% 30% at 75% 65%,
-            hsl(40 70% 75% / 0.55) 0%,
-            transparent 45%
-        ),
-        hsl(var(--background));
+        radial-gradient(ellipse 80% 60% at 10% 20%, hsl(330 65% 70% / 0.7) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 50% at 85% 15%, hsl(280 50% 70% / 0.65) 0%, transparent 55%),
+        radial-gradient(ellipse 50% 40% at 50% 80%, hsl(200 60% 70% / 0.6) 0%, transparent 50%),
+        radial-gradient(ellipse 40% 30% at 75% 65%, hsl(40 70% 75% / 0.55) 0%, transparent 45%), hsl(var(--background));
 }
 
 [data-theme="cozy"] aside {
-  background: hsl(var(--card) / 0.7);
-  backdrop-filter: blur(12px);
+    background: hsl(var(--card) / 0.7);
+    backdrop-filter: blur(12px);
 }
 
 [data-theme="cozy"] .cozy-sidebar-shell.bg-card {
-  background: hsl(var(--card) / 0.38);
-  backdrop-filter: blur(18px);
-  position: relative;
-  z-index: 1;
+    background: hsl(var(--card) / 0.38);
+    backdrop-filter: blur(18px);
+    position: relative;
+    z-index: 1;
 }
 
 [data-theme="cozy"] .cozy-sidebar-section {
-  background: transparent;
+    background: transparent;
 }
 
 [data-theme="cozy"] .cozy-sidebar-nav {
-  background: transparent;
+    background: transparent;
 }
 
 [data-theme="cozy"] main {
-  position: relative;
-  z-index: 1;
+    position: relative;
+    z-index: 1;
 }
 
 [data-theme="cozy"] aside .border-accent\/30 {
-  border-color: hsl(var(--accent) / 0.28);
+    border-color: hsl(var(--accent) / 0.28);
 }
 
 [data-theme="cozy"] aside .bg-accent\/10 {
-  background: hsl(var(--accent) / 0.12);
+    background: hsl(var(--accent) / 0.12);
 }
 
 [data-theme="cozy"] aside .hover\:bg-accent\/20:hover {
-  background: hsl(var(--accent) / 0.18);
+    background: hsl(var(--accent) / 0.18);
 }
 
 [data-theme="cozy"] .cozy-sidebar-button {
-  background: hsl(var(--surface) / 0.28);
-  backdrop-filter: blur(10px);
+    background: hsl(var(--surface) / 0.28);
+    backdrop-filter: blur(10px);
 }
 
 [data-theme="cozy"] .cozy-sidebar-card {
-  background: transparent;
+    background: transparent;
 }
 
 [data-theme="cozy"] .cozy-sidebar-card.bg-surface-active {
-  background-color: hsl(var(--surface-active));
+    background-color: hsl(var(--surface-active));
 }
 
 [data-theme="cozy"] .cozy-sidebar-card.hover\:bg-surface-hover:hover {
-  background-color: hsl(var(--surface-hover));
+    background-color: hsl(var(--surface-hover));
 }
 
 [data-theme="cozy"] .cozy-sidebar-chip {
-  background: hsl(var(--accent) / 0.12);
-  backdrop-filter: blur(8px);
+    background: hsl(var(--accent) / 0.12);
+    backdrop-filter: blur(8px);
 }
 
 [data-theme="cozy"] .bg-log-bg {
@@ -313,7 +296,7 @@
 }
 
 #root {
-    @apply h-screen flex flex-col;
+    @apply flex h-screen flex-col;
 }
 
 @layer utilities {

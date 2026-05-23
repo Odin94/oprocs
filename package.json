@@ -1,108 +1,117 @@
 {
-  "name": "oprocs",
-  "version": "0.2.0",
-  "main": "out/main/index.js",
-  "description": "Run multiple processes in parallel and monitor their output",
-  "author": "Odin94",
-  "private": true,
-  "repository": "github:Odin94/oprocs",
-  "type": "module",
-  "scripts": {
-    "test": "vitest run",
-    "dev": "electron-vite",
-    "build": "electron-vite build",
-    "build:win": "electron-vite build && electron-builder build --win",
-    "build:mac": "electron-vite build && electron-builder build --mac",
-    "build:linux": "electron-vite build && electron-builder build --linux",
-    "release:win": "electron-vite build && dotenv -e .env -- electron-builder build --win -p always",
-    "release:mac": "electron-vite build && dotenv -e .env -- electron-builder build --mac -p always",
-    "release:linux": "electron-vite build && dotenv -e .env -- electron-builder build --linux -p always",
-    "version:patch": "npm version patch",
-    "version:minor": "npm version minor",
-    "version:major": "npm version major",
-    "preview": "electron-vite preview"
-  },
-  "build": {
-    "appId": "com.oprocs.app",
-    "productName": "oprocs",
-    "files": [
-      "out",
-      "package.json"
-    ],
-    "directories": {
-      "output": "release/${version}",
-      "buildResources": "assets"
+    "name": "oprocs",
+    "version": "0.2.0",
+    "private": true,
+    "description": "Run multiple processes in parallel and monitor their output",
+    "author": "Odin94",
+    "repository": "github:Odin94/oprocs",
+    "type": "module",
+    "main": "out/main/index.js",
+    "scripts": {
+        "build": "electron-vite build",
+        "build:win": "electron-vite build && electron-builder build --win",
+        "build:mac": "electron-vite build && electron-builder build --mac",
+        "build:linux": "electron-vite build && electron-builder build --linux",
+        "check": "pnpm run typecheck && pnpm run lint && pnpm run fmt:check && pnpm test",
+        "dev": "electron-vite",
+        "fmt": "oxfmt . --write",
+        "fmt:check": "oxfmt . --check",
+        "lint": "oxlint .",
+        "lint:fix": "oxlint . --fix",
+        "preview": "electron-vite preview",
+        "release:win": "electron-vite build && dotenv -e .env -- electron-builder build --win -p always",
+        "release:mac": "electron-vite build && dotenv -e .env -- electron-builder build --mac -p always",
+        "release:linux": "electron-vite build && dotenv -e .env -- electron-builder build --linux -p always",
+        "test": "vitest run",
+        "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.node.json",
+        "version:patch": "pnpm version patch",
+        "version:minor": "pnpm version minor",
+        "version:major": "pnpm version major"
     },
-    "publish": {
-      "provider": "github",
-      "owner": "Odin94",
-      "repo": "oprocs",
-      "releaseType": "release"
+    "dependencies": {
+        "@leeoniya/ufuzzy": "^1.0.19",
+        "@opentelemetry/api-logs": "^0.218.0",
+        "@opentelemetry/sdk-logs": "^0.218.0",
+        "electron-updater": "^6.8.3",
+        "js-yaml": "^4.1.1",
+        "pino": "^10.3.1",
+        "pino-pretty": "^13.1.3",
+        "react": "^19.2.6",
+        "react-dom": "^19.2.6",
+        "react-virtuoso": "^4.18.7",
+        "sonner": "^2.0.7",
+        "strip-ansi": "^7.2.0",
+        "tree-kill": "^1.2.2",
+        "zod": "^4.4.3"
     },
-    "win": {
-      "icon": "assets/icon.ico",
-      "target": [
-        {
-          "target": "nsis",
-          "arch": [
-            "x64"
-          ]
+    "devDependencies": {
+        "@types/js-yaml": "^4.0.9",
+        "@types/node": "^25.9.1",
+        "@types/react": "^19.2.15",
+        "@types/react-dom": "^19.2.3",
+        "@vitejs/plugin-react": "^5.2.0",
+        "autoprefixer": "^10.5.0",
+        "dotenv-cli": "^11.0.0",
+        "electron": "^42.2.0",
+        "electron-builder": "^26.8.1",
+        "electron-vite": "^5.0.0",
+        "oxfmt": "^0.51.0",
+        "oxlint": "^1.66.0",
+        "postcss": "^8.5.15",
+        "tailwindcss": "^3.4.19",
+        "typescript": "^6.0.3",
+        "vite": "^7.3.3",
+        "vitest": "^4.1.6"
+    },
+    "packageManager": "pnpm@10.33.0",
+    "build": {
+        "appId": "com.oprocs.app",
+        "productName": "oprocs",
+        "files": [
+            "out",
+            "package.json"
+        ],
+        "directories": {
+            "output": "release/${version}",
+            "buildResources": "assets"
+        },
+        "publish": {
+            "provider": "github",
+            "owner": "Odin94",
+            "repo": "oprocs",
+            "releaseType": "release"
+        },
+        "win": {
+            "icon": "assets/icon.ico",
+            "target": [
+                {
+                    "target": "nsis",
+                    "arch": [
+                        "x64"
+                    ]
+                }
+            ],
+            "artifactName": "${productName}-Windows-${version}-Setup.${ext}"
+        },
+        "nsis": {
+            "oneClick": false,
+            "perMachine": false,
+            "allowToChangeInstallationDirectory": true,
+            "include": "build/nsis-allowOnlyOneInstallerInstance.nsh"
+        },
+        "mac": {
+            "icon": "assets/icon.icns",
+            "target": [
+                "dmg"
+            ],
+            "artifactName": "${productName}-Mac-${version}.${ext}"
+        },
+        "linux": {
+            "icon": "assets/icons",
+            "target": [
+                "AppImage"
+            ],
+            "artifactName": "${productName}-Linux-${version}.${ext}"
         }
-      ],
-      "artifactName": "${productName}-Windows-${version}-Setup.${ext}"
-    },
-    "nsis": {
-      "oneClick": false,
-      "perMachine": false,
-      "allowToChangeInstallationDirectory": true,
-      "include": "build/nsis-allowOnlyOneInstallerInstance.nsh"
-    },
-    "mac": {
-      "icon": "assets/icon.icns",
-      "target": [
-        "dmg"
-      ],
-      "artifactName": "${productName}-Mac-${version}.${ext}"
-    },
-    "linux": {
-      "icon": "assets/icons",
-      "target": [
-        "AppImage"
-      ],
-      "artifactName": "${productName}-Linux-${version}.${ext}"
     }
-  },
-  "dependencies": {
-    "@leeoniya/ufuzzy": "^1.0.2",
-    "@opentelemetry/api-logs": "^0.211.0",
-    "@opentelemetry/sdk-logs": "^0.211.0",
-    "electron-updater": "^6.3.9",
-    "js-yaml": "^4.1.0",
-    "pino": "^10.3.0",
-    "pino-pretty": "^13.1.3",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "react-virtuoso": "^4.18.1",
-    "sonner": "^2.0.7",
-    "strip-ansi": "^7.1.0",
-    "tree-kill": "^1.2.2",
-    "zod": "^4.3.6"
-  },
-  "devDependencies": {
-    "@types/js-yaml": "^4.0.9",
-    "@types/node": "^22.10.1",
-    "@types/react": "^18.3.12",
-    "@types/react-dom": "^18.3.1",
-    "@vitejs/plugin-react": "^4.3.3",
-    "autoprefixer": "^10.4.24",
-    "dotenv-cli": "^11.0.0",
-    "electron": "^33.2.0",
-    "electron-builder": "^26.4.0",
-    "electron-vite": "^2.2.0",
-    "postcss": "^8.5.6",
-    "tailwindcss": "^3.4.19",
-    "typescript": "^5.6.3",
-    "vite": "^5.4.11",
-    "vitest": "^2.1.9"
-  }
 }

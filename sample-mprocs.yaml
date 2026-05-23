@@ -1,11 +1,11 @@
 procs:
-  ping:
-    shell: "ping -n 5 127.0.0.1"
-    autostart: false
-  echo:
-    shell: "node -e \"let i=0; setInterval(() => console.log('tick', i++), 1000)\""
-    autostart: true
-    autorestart: true
-  python-server:
-    shell: "python -m http.server 8000"
-    autostart: true
+    ping:
+        shell: "ping -n 5 127.0.0.1"
+        autostart: false
+    echo:
+        shell: 'node -e "let i=0; setInterval(() => console.log(''tick'', i++), 1000)"'
+        autostart: true
+        autorestart: true
+    python-server:
+        shell: "python -m http.server 8000"
+        autostart: true

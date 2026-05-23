@@ -6,7 +6,9 @@ import { loadAppConfig, resolvePathTemplate, getAppConfigPath, DEFAULT_APP_CONFI
 
 describe("resolvePathTemplate", () => {
     it("substitutes {folder_name}", () => {
-        expect(resolvePathTemplate("/some/path/{folder_name}/logs", "myapp")).toBe(path.normalize("/some/path/myapp/logs"))
+        expect(resolvePathTemplate("/some/path/{folder_name}/logs", "myapp")).toBe(
+            path.normalize("/some/path/myapp/logs"),
+        )
     })
 
     it("substitutes multiple occurrences of {folder_name}", () => {
