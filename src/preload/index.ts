@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from "electron"
 
 contextBridge.exposeInMainWorld("electronAPI", {
+    getAppConfig: () => ipcRenderer.invoke("get-app-config"),
     getDefaultConfigPath: () => ipcRenderer.invoke("get-default-config-path"),
     loadConfig: (configPath: string) => ipcRenderer.invoke("load-config", configPath),
     startProc: (procId: string) => ipcRenderer.invoke("start-proc", procId),

@@ -36,7 +36,7 @@ if (appConfig.quiet) setQuiet(true)
 const isDev = process.env.NODE_ENV === "development" || !app.isPackaged
 
 const pm = new ProcessManager(appConfig)
-setupIpc(pm, { startDir: parseDirectoryArg() })
+setupIpc(pm, { startDir: parseDirectoryArg(), appConfig })
 
 const createWindow = () => {
     const win = new BrowserWindow({

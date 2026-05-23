@@ -9,6 +9,8 @@ const AppConfigSchema = z.object({
     logs_dir: z.string().optional(),
     // Directory for the lock file. Supports {folder_name} variable.
     lock_dir: z.string().optional(),
+    // Disable UI animations and transitions.
+    disable_animations: z.boolean().default(false),
     // Suppress oprocs' own log output to the terminal.
     quiet: z.boolean().default(false),
     // Disable writing process output to log files on disk.
@@ -18,30 +20,49 @@ const AppConfigSchema = z.object({
 export type AppConfig = z.infer<typeof AppConfigSchema>
 
 export const DEFAULT_APP_CONFIG: AppConfig = {
+    disable_animations: false,
     quiet: false,
     no_logs: false,
 }
 
-export function getAppConfigPath(): string {
+export function getAppConfigPath(platform = process.platform, homeDir = os.homedir()): string {
+    if (platform === "win32") return path.join(homeDir, ".oprocs", "oprocs.yaml")
+    return path.join(homeDir, ".config", ".oprocs", "oprocs.yaml")
+}
+
+function getLegacyAppConfigPath(): string {
     return path.join(os.homedir(), ".config", "oprocs", "config.yaml")
+}
+
+function ensureAppConfigFile(configPath: string): void {
+    if (fs.existsSync(configPath)) return
+    fs.mkdirSync(path.dirname(configPath), { recursive: true })
+    fs.writeFileSync(configPath, INIT_CONFIG_CONTENT, "utf-8")
 }
 
 export function loadAppConfig(): AppConfig {
     const configPath = getAppConfigPath()
-    if (!fs.existsSync(configPath)) {
+    const legacyConfigPath = getLegacyAppConfigPath()
+    const pathToRead = fs.existsSync(configPath)
+        ? configPath
+        : fs.existsSync(legacyConfigPath)
+          ? legacyConfigPath
+          : configPath
+    if (!fs.existsSync(pathToRead)) {
+        ensureAppConfigFile(configPath)
         return DEFAULT_APP_CONFIG
     }
     try {
-        const raw = fs.readFileSync(configPath, "utf-8")
+        const raw = fs.readFileSync(pathToRead, "utf-8")
         const parsed = yaml.load(raw)
         const result = AppConfigSchema.safeParse(parsed ?? {})
         if (!result.success) {
-            console.warn(`[oprocs] Invalid app config at ${configPath}:`, result.error.message)
+            console.warn(`[oprocs] Invalid app config at ${pathToRead}:`, result.error.message)
             return DEFAULT_APP_CONFIG
         }
         return result.data
     } catch (err) {
-        console.warn(`[oprocs] Failed to read app config at ${configPath}:`, err)
+        console.warn(`[oprocs] Failed to read app config at ${pathToRead}:`, err)
         return DEFAULT_APP_CONFIG
     }
 }
@@ -70,6 +91,10 @@ const INIT_CONFIG_CONTENT = `# oprocs global configuration
 # If unset, the lock file is stored at <config-file-dir>/.oprocs/.oprocs.lock
 # Example: lock_dir: "~/.oprocs-locks/{folder_name}"
 # lock_dir:
+
+# Disable UI animations and transitions.
+# Default: false
+disable_animations: false
 
 # Quiet mode: suppress oprocs' own log output to the terminal.
 # Does not affect what is shown in the UI.

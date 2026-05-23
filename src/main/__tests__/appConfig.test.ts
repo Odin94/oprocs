@@ -29,6 +29,16 @@ describe("resolvePathTemplate", () => {
     })
 })
 
+describe("getAppConfigPath", () => {
+    it("uses ~/.oprocs/oprocs.yaml on Windows", () => {
+        expect(getAppConfigPath("win32", "C:\\Users\\me")).toBe(path.join("C:\\Users\\me", ".oprocs", "oprocs.yaml"))
+    })
+
+    it("uses ~/.config/.oprocs/oprocs.yaml on Unix-like platforms", () => {
+        expect(getAppConfigPath("linux", "/home/me")).toBe(path.join("/home/me", ".config", ".oprocs", "oprocs.yaml"))
+    })
+})
+
 describe("loadAppConfig", () => {
     let tmpDir: string
     let originalHome: string | undefined
@@ -51,9 +61,12 @@ describe("loadAppConfig", () => {
         fs.rmSync(tmpDir, { recursive: true, force: true })
     })
 
-    it("returns defaults when config file does not exist", () => {
+    it("creates the default config and returns defaults when config file does not exist", () => {
+        const configPath = getAppConfigPath()
         const config = loadAppConfig()
         expect(config).toEqual(DEFAULT_APP_CONFIG)
+        expect(fs.existsSync(configPath)).toBe(true)
+        expect(fs.readFileSync(configPath, "utf-8")).toContain("disable_animations: false")
     })
 
     it("parses valid config file", () => {
@@ -61,13 +74,14 @@ describe("loadAppConfig", () => {
         fs.mkdirSync(path.dirname(configPath), { recursive: true })
         fs.writeFileSync(
             configPath,
-            `logs_dir: "~/.oprocs-logs/{folder_name}"\nlock_dir: "/tmp/locks"\nquiet: true\nno_logs: true\n`,
+            `logs_dir: "~/.oprocs-logs/{folder_name}"\nlock_dir: "/tmp/locks"\ndisable_animations: true\nquiet: true\nno_logs: true\n`,
             "utf-8",
         )
 
         const config = loadAppConfig()
         expect(config.logs_dir).toBe("~/.oprocs-logs/{folder_name}")
         expect(config.lock_dir).toBe("/tmp/locks")
+        expect(config.disable_animations).toBe(true)
         expect(config.quiet).toBe(true)
         expect(config.no_logs).toBe(true)
     })
@@ -79,6 +93,7 @@ describe("loadAppConfig", () => {
 
         const config = loadAppConfig()
         expect(config.quiet).toBe(true)
+        expect(config.disable_animations).toBe(false)
         expect(config.no_logs).toBe(false)
         expect(config.logs_dir).toBeUndefined()
         expect(config.lock_dir).toBeUndefined()

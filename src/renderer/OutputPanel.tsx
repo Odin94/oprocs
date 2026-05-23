@@ -13,6 +13,7 @@ type OutputPanelProps = {
     procId: string | null
     procName: string
     theme: "tech" | "cozy"
+    disableAnimations: boolean
     lines: string[]
     matches: Match[]
     filteredIndices: number[]
@@ -36,6 +37,7 @@ type LogLineRowProps = {
     animatedLineIndicesRef: React.MutableRefObject<Set<number>>
     animationOrderRef: React.MutableRefObject<Map<number, number>>
     nextAnimationOrderRef: React.MutableRefObject<number>
+    disableAnimations: boolean
 }
 
 type OffsetSegment = AnsiSegment & {
@@ -82,8 +84,9 @@ const LogLineRow = ({
     animatedLineIndicesRef,
     animationOrderRef,
     nextAnimationOrderRef,
+    disableAnimations,
 }: LogLineRowProps) => {
-    const shouldAnimate = !animatedLineIndicesRef.current.has(sourceLineIndex)
+    const shouldAnimate = !disableAnimations && !animatedLineIndicesRef.current.has(sourceLineIndex)
     if (shouldAnimate && !animationOrderRef.current.has(sourceLineIndex)) {
         animationOrderRef.current.set(sourceLineIndex, nextAnimationOrderRef.current)
         nextAnimationOrderRef.current += 1
@@ -128,6 +131,7 @@ export const OutputPanel = ({
     procId,
     procName,
     theme,
+    disableAnimations,
     lines,
     matches,
     filteredIndices,
@@ -205,12 +209,12 @@ export const OutputPanel = ({
             if (displayIndex >= 0 && virtuosoRef.current) {
                 virtuosoRef.current.scrollToIndex({
                     index: displayIndex,
-                    behavior: "smooth",
+                    behavior: disableAnimations ? "auto" : "smooth",
                     align: "center",
                 })
             }
         },
-        [filterLines, filteredIndices],
+        [disableAnimations, filterLines, filteredIndices],
     )
 
     const lastScrolledMatchIndexRef = useRef(-1)
@@ -252,6 +256,7 @@ export const OutputPanel = ({
                 animatedLineIndicesRef={animatedLineIndicesRef}
                 animationOrderRef={animationOrderRef}
                 nextAnimationOrderRef={nextAnimationOrderRef}
+                disableAnimations={disableAnimations}
             />
         )
     }

@@ -145,6 +145,18 @@
     animation: cozy-bounce 1.5s ease-in-out infinite;
 }
 
+[data-animations="off"] *,
+[data-animations="off"] *::before,
+[data-animations="off"] *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0s !important;
+    animation: none !important;
+}
+
+[data-animations="off"] .log-line-animate {
+    opacity: 1;
+}
+
 @keyframes cozy-bounce {
     0%,
     100% {

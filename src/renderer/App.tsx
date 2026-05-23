@@ -24,6 +24,7 @@ export type ConfigState = {
 declare global {
     interface Window {
         electronAPI?: {
+            getAppConfig: () => Promise<{ disable_animations?: boolean }>
             getDefaultConfigPath: () => Promise<string | null>
             loadConfig: (configPath: string) => Promise<
                 | {
@@ -55,6 +56,7 @@ const api = window.electronAPI
 
 export default function App() {
     const [theme, setTheme] = useState<"tech" | "cozy">("tech")
+    const [disableAnimations, setDisableAnimations] = useState(false)
     const [config, setConfig] = useState<ConfigState>(null)
     const [selectedProcId, setSelectedProcId] = useState<string | null>(null)
     const [outputByProc, setOutputByProc] = useState<Record<string, string>>({})
@@ -172,6 +174,17 @@ export default function App() {
     )
 
     useEffect(() => {
+        if (!api) return
+        api.getAppConfig().then((appConfig) => {
+            setDisableAnimations(appConfig.disable_animations ?? false)
+        })
+    }, [])
+
+    useEffect(() => {
+        document.documentElement.dataset.animations = disableAnimations ? "off" : "on"
+    }, [disableAnimations])
+
+    useEffect(() => {
         if (!api || config !== null) return
         api.getDefaultConfigPath().then((defaultPath) => {
             if (!defaultPath) return
@@ -244,6 +257,7 @@ export default function App() {
         return (
             <div
                 data-theme={theme}
+                data-animations={disableAnimations ? "off" : "on"}
                 className={`flex h-screen min-h-0 w-full flex-1 ${theme === "cozy" ? "cozy-bg" : ""}`}
             >
                 <div className="flex flex-1 items-center justify-center text-muted-foreground">
@@ -261,6 +275,7 @@ export default function App() {
     return (
         <div
             data-theme={theme}
+            data-animations={disableAnimations ? "off" : "on"}
             className={`flex h-screen min-h-0 w-full flex-1 flex-col ${theme === "cozy" ? "cozy-bg" : ""}`}
         >
             {updateReadyVersion ? (
@@ -301,6 +316,7 @@ export default function App() {
                         procId={selectedProcId}
                         procName={config.procs.find((p) => p.id === selectedProcId)?.name ?? ""}
                         theme={theme}
+                        disableAnimations={disableAnimations}
                         status={config.procs.find((p) => p.id === selectedProcId)?.status}
                         exitCode={config.procs.find((p) => p.id === selectedProcId)?.exitCode}
                         openUrl={config.procs.find((p) => p.id === selectedProcId)?.openUrl}

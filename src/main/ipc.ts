@@ -5,12 +5,15 @@ import { loadConfig } from "./config.js"
 import { checkForUpdates, quitAndInstall } from "./updater.js"
 import type { ProcessManager } from "./processManager.js"
 import { log } from "./logger.js"
+import type { AppConfig } from "./appConfig.js"
 
 const noWinCmdRewrite = process.argv.includes("--no-cmd-rewrite")
 
-export const setupIpc = (pm: ProcessManager, options?: { startDir?: string }) => {
+export const setupIpc = (pm: ProcessManager, options?: { startDir?: string; appConfig?: AppConfig }) => {
     let currentConfigPath: string | null = null
     let currentConfigDir: string | null = null
+
+    ipcMain.handle("get-app-config", async () => options?.appConfig ?? {})
 
     ipcMain.handle("get-default-config-path", async () => {
         const possibleFileNames = ["oprocs.yaml", "oprocs.yml", "mprocs.yaml", "mprocs.yml"]

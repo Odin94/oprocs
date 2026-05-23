@@ -37,6 +37,10 @@ end
 
 Same as mprocs: `procs` map with entries that have either `shell` or `cmd`, plus optional `cwd`, `env`, `add_path`, `autostart`, `autorestart`, `stop`. `<CONFIG_DIR>` in paths is replaced with the config file directory.
 
+## Global config
+
+oprocs creates and reads a global config file at `~/.config/.oprocs/oprocs.yaml` on Unix-like systems and `~/.oprocs/oprocs.yaml` on Windows. Set `disable_animations: true` there to disable UI animations and transitions.
+
 ## Credits
 
 - Plant icon: [Growing-plant icons created by Good Ware - Flaticon](https://www.flaticon.com/free-icons/growing-plant)
