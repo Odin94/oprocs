@@ -18,6 +18,7 @@
         "fmt:check": "oxfmt . --check",
         "lint": "oxlint .",
         "lint:fix": "oxlint . --fix",
+        "postinstall": "install-electron --no",
         "preview": "electron-vite preview",
         "release:win": "electron-vite build && dotenv -e .env -- electron-builder build --win -p always",
         "release:mac": "electron-vite build && dotenv -e .env -- electron-builder build --mac -p always",

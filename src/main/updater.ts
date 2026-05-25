@@ -1,5 +1,7 @@
-import { autoUpdater } from "electron-updater"
 import { BrowserWindow } from "electron"
+import { createRequire } from "node:module"
+
+const { autoUpdater } = createRequire(import.meta.url)("electron-updater") as typeof import("electron-updater")
 
 const notifyAll = (channel: string, ...args: unknown[]) => {
     BrowserWindow.getAllWindows().forEach((w) => {
