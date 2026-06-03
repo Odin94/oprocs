@@ -1,5 +1,5 @@
 import pino from "pino"
-import pinoPretty from "pino-pretty"
+import { createRequire } from "node:module"
 import { logs, SeverityNumber } from "@opentelemetry/api-logs"
 import { LoggerProvider, SimpleLogRecordProcessor, InMemoryLogRecordExporter } from "@opentelemetry/sdk-logs"
 
@@ -13,9 +13,12 @@ const otelProvider = new LoggerProvider({
 logs.setGlobalLoggerProvider(otelProvider)
 const otelLogger = logs.getLogger("oprocs", "0.1.1")
 
-const stream = isDev
-    ? pinoPretty({ colorize: true, translateTime: "SYS:HH:MM:ss", hideObject: true })
-    : pino.destination(1)
+const createPrettyStream = () => {
+    const pinoPretty = createRequire(import.meta.url)("pino-pretty") as typeof import("pino-pretty")
+    return pinoPretty({ colorize: true, translateTime: "SYS:HH:MM:ss", hideObject: true })
+}
+
+const stream = isDev ? createPrettyStream() : pino.destination(1)
 const pinoLogger = pino({ level: isDev ? "debug" : "info", base: { name: "oprocs" } }, stream)
 const lockLogger = pinoLogger.child({ module: "lock" })
 
