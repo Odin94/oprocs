@@ -353,7 +353,6 @@ export default function App() {
                     <OutputPanel
                         procId={selectedProcId}
                         procName={config.procs.find((p) => p.id === selectedProcId)?.name ?? ""}
-                        theme={theme}
                         disableAnimations={disableAnimations}
                         status={config.procs.find((p) => p.id === selectedProcId)?.status}
                         exitCode={config.procs.find((p) => p.id === selectedProcId)?.exitCode}

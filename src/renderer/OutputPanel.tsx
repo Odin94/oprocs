@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso"
 import { CheckIcon, CopyIcon, ExternalLinkIcon, RotateCwIcon, WrapTextIcon } from "./icons"
 import { parseAnsiToSegments, withoutAnsiColors, type AnsiSegment } from "./utils/ansi"
@@ -16,7 +16,6 @@ export type Match = { lineIndex: number; start: number; end: number }
 type OutputPanelProps = {
     procId: string | null
     procName: string
-    theme: "tech" | "cozy"
     disableAnimations: boolean
     lines: string[]
     matches: Match[]
@@ -80,6 +79,33 @@ const isMacOS = () => navigator.platform.toLowerCase().includes("mac")
 const isEditableTarget = (target: EventTarget | null) =>
     target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement
 const getBoundedLogFontSize = (fontSize: number) => Math.max(MIN_LOG_FONT_SIZE, Math.min(MAX_LOG_FONT_SIZE, fontSize))
+const getLineIndicesOutsideViewport = ({
+    displayLength,
+    filterLines,
+    filteredIndices,
+    lineHeight,
+    lineCount,
+    viewportHeight,
+}: {
+    displayLength: number
+    filterLines: boolean
+    filteredIndices: number[]
+    lineHeight: number
+    lineCount: number
+    viewportHeight: number
+}) => {
+    const animatedLineIndices = new Set(Array.from({ length: lineCount }, (_, index) => index))
+    if (displayLength === 0) return animatedLineIndices
+
+    const visibleLineCount = Math.max(1, Math.ceil(viewportHeight / lineHeight))
+    const firstVisibleDisplayIndex = Math.max(0, displayLength - visibleLineCount)
+
+    for (let displayIndex = firstVisibleDisplayIndex; displayIndex < displayLength; displayIndex += 1) {
+        animatedLineIndices.delete(filterLines ? filteredIndices[displayIndex] : displayIndex)
+    }
+
+    return animatedLineIndices
+}
 
 const LogLineRow = ({
     animationEpoch,
@@ -140,7 +166,6 @@ const LogLineRow = ({
 export const OutputPanel = ({
     procId,
     procName,
-    theme,
     disableAnimations,
     lines,
     matches,
@@ -153,6 +178,7 @@ export const OutputPanel = ({
     toolbar,
 }: OutputPanelProps) => {
     const virtuosoRef = useRef<VirtuosoHandle>(null)
+    const logViewportRef = useRef<HTMLDivElement>(null)
     const [wrapLines, setWrapLines] = useState(false)
     const [copied, setCopied] = useState(false)
     const [logFontSize, setLogFontSize] = useState(LOG_FONT_SIZE)
@@ -175,6 +201,8 @@ export const OutputPanel = ({
     const animationOrderRef = useRef<Map<number, number>>(new Map())
     const nextAnimationOrderRef = useRef(0)
     const prevLineCountRef = useRef(0)
+    const lastAnimationResetProcIdRef = useRef<string | null>(null)
+    const pendingBottomScrollProcIdRef = useRef<string | null>(null)
     const [animationEpoch, setAnimationEpoch] = useState(0)
     const adjustLogFontSize = useCallback((delta: number) => {
         setLogFontSize((value) => getBoundedLogFontSize(value + delta))
@@ -188,23 +216,36 @@ export const OutputPanel = ({
         [filterLines, filteredIndices],
     )
 
-    useEffect(() => {
+    useLayoutEffect(() => {
+        if (lastAnimationResetProcIdRef.current === procId) return
+
+        lastAnimationResetProcIdRef.current = procId
         setWrapLines(false)
-        animatedLineIndicesRef.current = new Set()
+        animatedLineIndicesRef.current = getLineIndicesOutsideViewport({
+            displayLength,
+            filterLines,
+            filteredIndices,
+            lineCount: lines.length,
+            lineHeight: logLineHeight,
+            viewportHeight: Math.max(0, (logViewportRef.current?.clientHeight ?? 0) - 32),
+        })
         animationOrderRef.current = new Map()
         nextAnimationOrderRef.current = 0
-        prevLineCountRef.current = 0
+        prevLineCountRef.current = lines.length
+        pendingBottomScrollProcIdRef.current = procId
         setAnimationEpoch((value) => value + 1)
-    }, [procId])
+    }, [displayLength, filterLines, filteredIndices, lines.length, logLineHeight, procId])
 
-    useEffect(() => {
-        if (theme === "cozy") {
-            animatedLineIndicesRef.current = new Set()
-            animationOrderRef.current = new Map()
-            nextAnimationOrderRef.current = 0
-            setAnimationEpoch((value) => value + 1)
-        }
-    }, [theme])
+    useLayoutEffect(() => {
+        if (!procId || pendingBottomScrollProcIdRef.current !== procId || displayLength === 0) return
+
+        virtuosoRef.current?.scrollToIndex({
+            index: displayLength - 1,
+            align: "end",
+            behavior: "auto",
+        })
+        pendingBottomScrollProcIdRef.current = null
+    }, [displayLength, procId])
 
     useEffect(() => {
         if (lines.length < prevLineCountRef.current) {
@@ -396,11 +437,10 @@ export const OutputPanel = ({
                     No output yet.
                 </div>
             ) : (
-                <div className="relative min-h-0 flex-1 bg-log-bg py-4" onWheel={handleLogWheel}>
+                <div ref={logViewportRef} className="relative min-h-0 flex-1 bg-log-bg py-4" onWheel={handleLogWheel}>
                     {isLogZoomed ? <LogZoomResetButton label={zoomLabel} onReset={resetLogFontSize} /> : null}
                     {wrapLines ? (
                         <Virtuoso
-                            key={`wrap-${procId ?? "none"}-${theme}`}
                             ref={virtuosoRef}
                             style={{ height: "100%" }}
                             totalCount={displayLength}
@@ -411,7 +451,6 @@ export const OutputPanel = ({
                         />
                     ) : (
                         <Virtuoso
-                            key={`nowrap-${procId ?? "none"}-${theme}`}
                             ref={virtuosoRef}
                             style={{ height: "100%" }}
                             totalCount={displayLength}
