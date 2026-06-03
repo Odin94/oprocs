@@ -3,9 +3,11 @@ import { toast } from "sonner"
 import { ProcessList } from "./ProcessList"
 import { OutputPanel, type Match } from "./OutputPanel"
 import { SearchBar, type SearchMode } from "./SearchBar"
+import { XIcon } from "./icons"
 import { getOpenUrl } from "./utils/openUrl"
 
 const MAX_LINES = 10_000
+const ANIMATION_SETTING_STORAGE_KEY = "oprocs:disable-log-animations"
 
 export type ProcInfo = {
     id: string
@@ -54,9 +56,27 @@ declare global {
 
 const api = window.electronAPI
 
+const readStoredDisableAnimations = () => {
+    try {
+        const stored = window.localStorage.getItem(ANIMATION_SETTING_STORAGE_KEY)
+        return stored === null ? null : stored === "true"
+    } catch {
+        return null
+    }
+}
+
+const storeDisableAnimations = (value: boolean) => {
+    try {
+        window.localStorage.setItem(ANIMATION_SETTING_STORAGE_KEY, String(value))
+    } catch {
+        // Ignore storage failures; the setting still applies for this session.
+    }
+}
+
 export default function App() {
     const [theme, setTheme] = useState<"tech" | "cozy">("tech")
-    const [disableAnimations, setDisableAnimations] = useState(false)
+    const [disableAnimations, setDisableAnimations] = useState(() => readStoredDisableAnimations() ?? false)
+    const [settingsOpen, setSettingsOpen] = useState(false)
     const [config, setConfig] = useState<ConfigState>(null)
     const [selectedProcId, setSelectedProcId] = useState<string | null>(null)
     const [outputByProc, setOutputByProc] = useState<Record<string, string>>({})
@@ -176,13 +196,30 @@ export default function App() {
     useEffect(() => {
         if (!api) return
         api.getAppConfig().then((appConfig) => {
-            setDisableAnimations(appConfig.disable_animations ?? false)
+            setDisableAnimations(readStoredDisableAnimations() ?? appConfig.disable_animations ?? false)
         })
     }, [])
 
     useEffect(() => {
         document.documentElement.dataset.animations = disableAnimations ? "off" : "on"
     }, [disableAnimations])
+
+    useEffect(() => {
+        if (!settingsOpen) return
+
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (event.key === "Escape") setSettingsOpen(false)
+        }
+
+        window.addEventListener("keydown", handleKeyDown)
+        return () => window.removeEventListener("keydown", handleKeyDown)
+    }, [settingsOpen])
+
+    const setLogAnimationsEnabled = useCallback((enabled: boolean) => {
+        const nextDisableAnimations = !enabled
+        setDisableAnimations(nextDisableAnimations)
+        storeDisableAnimations(nextDisableAnimations)
+    }, [])
 
     useEffect(() => {
         if (!api || config !== null) return
@@ -309,6 +346,7 @@ export default function App() {
                     onRestart={(id: string) => api?.restartProc(id) ?? Promise.resolve()}
                     theme={theme}
                     onToggleTheme={() => setTheme((current) => (current === "tech" ? "cozy" : "tech"))}
+                    onOpenSettings={() => setSettingsOpen(true)}
                     onOpenConfig={openConfig}
                 />
                 <main className="flex min-w-0 flex-1 flex-col">
@@ -351,6 +389,86 @@ export default function App() {
                     />
                 </main>
             </div>
+            {settingsOpen ? (
+                <SettingsDialog
+                    theme={theme}
+                    logAnimationsEnabled={!disableAnimations}
+                    onLogAnimationsChange={setLogAnimationsEnabled}
+                    onClose={() => setSettingsOpen(false)}
+                />
+            ) : null}
         </div>
     )
 }
+
+const SettingsDialog = ({
+    theme,
+    logAnimationsEnabled,
+    onLogAnimationsChange,
+    onClose,
+}: {
+    theme: "tech" | "cozy"
+    logAnimationsEnabled: boolean
+    onLogAnimationsChange: (enabled: boolean) => void
+    onClose: () => void
+}) => (
+    <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-background/70 px-4 backdrop-blur-sm"
+        onMouseDown={(event) => {
+            if (event.target === event.currentTarget) onClose()
+        }}
+    >
+        <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="settings-title"
+            className={`w-full max-w-md rounded-lg border border-border bg-card p-4 text-foreground shadow-2xl ${
+                theme === "cozy" ? "shadow-primary/15" : "shadow-black/40"
+            }`}
+        >
+            <div className="mb-4 flex items-center justify-between gap-3 border-b border-border pb-3">
+                <div>
+                    <h2 id="settings-title" className="text-sm font-semibold tracking-wide">
+                        Settings
+                    </h2>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                        {theme === "cozy" ? "✨ oprocs" : "oprocs"} preferences
+                    </p>
+                </div>
+                <button
+                    type="button"
+                    onClick={onClose}
+                    className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground"
+                    title="Close settings"
+                >
+                    <XIcon className="h-4 w-4" />
+                </button>
+            </div>
+
+            <div className="flex items-center justify-between gap-4 rounded-lg border border-border bg-surface/70 px-3 py-3">
+                <div className="min-w-0">
+                    <div className="text-sm font-medium text-foreground">Log fade-in animations</div>
+                    <div className="mt-0.5 text-xs text-muted-foreground">
+                        New output lines {logAnimationsEnabled ? "fade into view" : "appear immediately"}.
+                    </div>
+                </div>
+                <button
+                    type="button"
+                    role="switch"
+                    aria-checked={logAnimationsEnabled}
+                    onClick={() => onLogAnimationsChange(!logAnimationsEnabled)}
+                    className={`relative h-6 w-11 shrink-0 rounded-full border transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-card ${
+                        logAnimationsEnabled ? "border-primary bg-primary" : "border-border bg-muted"
+                    }`}
+                    title={`${logAnimationsEnabled ? "Disable" : "Enable"} log fade-in animations`}
+                >
+                    <span
+                        className={`pointer-events-none absolute left-px top-px h-5 w-5 rounded-full bg-card shadow transition-transform ${
+                            logAnimationsEnabled ? "translate-x-5" : "translate-x-0"
+                        }`}
+                    />
+                </button>
+            </div>
+        </section>
+    </div>
+)

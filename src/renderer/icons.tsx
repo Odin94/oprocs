@@ -128,6 +128,13 @@ export const CopyIcon = icon(
 
 export const CheckIcon = icon(<path d="M20 6 9 17l-5-5" />)
 
+export const XIcon = icon(
+    <>
+        <path d="M18 6 6 18" />
+        <path d="m6 6 12 12" />
+    </>,
+)
+
 export const WrapTextIcon = icon(
     <>
         <path d="M4 6h12a4 4 0 0 1 0 8H9" />
