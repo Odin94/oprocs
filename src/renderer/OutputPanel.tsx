@@ -1,11 +1,15 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso"
-import { CheckIcon, CopyIcon, ExternalLinkIcon, WrapTextIcon } from "./icons"
+import { CheckIcon, CopyIcon, ExternalLinkIcon, RotateCwIcon, WrapTextIcon } from "./icons"
 import { parseAnsiToSegments, withoutAnsiColors, type AnsiSegment } from "./utils/ansi"
 import { extractUrls, findUrlMatches } from "./utils/links"
 
 const LINE_HEIGHT = 20
 const CHAR_WIDTH = 7.8
+const LOG_FONT_SIZE = 12
+const MIN_LOG_FONT_SIZE = 9
+const MAX_LOG_FONT_SIZE = 24
+const LOG_FONT_SIZE_STEP = 1
 
 export type Match = { lineIndex: number; start: number; end: number }
 
@@ -27,6 +31,7 @@ type OutputPanelProps = {
 
 type LogLineRowProps = {
     animationEpoch: number
+    fontSize: number
     lineHeight: number
     rawLine: string
     sourceLineIndex: number
@@ -71,9 +76,14 @@ const wrapComponents = { Scroller: LogScroller }
 const hScrollComponents = { Scroller: HScrollScroller, List: MinWidthList }
 const MAX_LOG_LINE_ANIMATION_DELAY_MS = 300
 const LOG_LINE_ANIMATION_DURATION_MS = 500
+const isMacOS = () => navigator.platform.toLowerCase().includes("mac")
+const isEditableTarget = (target: EventTarget | null) =>
+    target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement
+const getBoundedLogFontSize = (fontSize: number) => Math.max(MIN_LOG_FONT_SIZE, Math.min(MAX_LOG_FONT_SIZE, fontSize))
 
 const LogLineRow = ({
     animationEpoch,
+    fontSize,
     lineHeight,
     rawLine,
     sourceLineIndex,
@@ -112,7 +122,7 @@ const LogLineRow = ({
                 ...(wrapLines ? { minHeight: lineHeight } : { height: lineHeight }),
                 lineHeight: `${lineHeight}px`,
                 fontFamily: "var(--font-mono)",
-                fontSize: 12,
+                fontSize,
                 whiteSpace: wrapLines ? "pre-wrap" : "pre",
                 animationDelay: shouldAnimate ? `${animationDelayMs}ms` : undefined,
             }}
@@ -145,6 +155,11 @@ export const OutputPanel = ({
     const virtuosoRef = useRef<VirtuosoHandle>(null)
     const [wrapLines, setWrapLines] = useState(false)
     const [copied, setCopied] = useState(false)
+    const [logFontSize, setLogFontSize] = useState(LOG_FONT_SIZE)
+    const logLineHeight = Math.round((LINE_HEIGHT / LOG_FONT_SIZE) * logFontSize)
+    const logCharWidth = (CHAR_WIDTH / LOG_FONT_SIZE) * logFontSize
+    const isLogZoomed = logFontSize !== LOG_FONT_SIZE
+    const zoomLabel = `${Math.round((logFontSize / LOG_FONT_SIZE) * 100)}%`
 
     const copyLogs = useCallback(() => {
         const displayedLines = filterLines ? filteredIndices.map((i) => lines[i] ?? "") : lines
@@ -161,6 +176,10 @@ export const OutputPanel = ({
     const nextAnimationOrderRef = useRef(0)
     const prevLineCountRef = useRef(0)
     const [animationEpoch, setAnimationEpoch] = useState(0)
+    const adjustLogFontSize = useCallback((delta: number) => {
+        setLogFontSize((value) => getBoundedLogFontSize(value + delta))
+    }, [])
+    const resetLogFontSize = useCallback(() => setLogFontSize(LOG_FONT_SIZE), [])
 
     const displayLength = filterLines ? filteredIndices.length : lines.length
     const initialTopMostItemIndex = Math.max(displayLength - 1, 0)
@@ -197,11 +216,53 @@ export const OutputPanel = ({
         prevLineCountRef.current = lines.length
     }, [lines.length])
 
+    useEffect(() => {
+        if (!procId) return
+
+        const handleZoomShortcut = (event: KeyboardEvent) => {
+            if (isEditableTarget(event.target)) return
+
+            const modifierPressed = isMacOS() ? event.metaKey : event.ctrlKey
+            if (!modifierPressed || event.altKey) return
+
+            if (event.key === "0") {
+                event.preventDefault()
+                resetLogFontSize()
+                return
+            }
+
+            if (event.key === "+" || event.key === "=") {
+                event.preventDefault()
+                adjustLogFontSize(LOG_FONT_SIZE_STEP)
+                return
+            }
+
+            if (event.key === "-" || event.key === "_") {
+                event.preventDefault()
+                adjustLogFontSize(-LOG_FONT_SIZE_STEP)
+            }
+        }
+
+        window.addEventListener("keydown", handleZoomShortcut)
+        return () => window.removeEventListener("keydown", handleZoomShortcut)
+    }, [adjustLogFontSize, procId, resetLogFontSize])
+
+    const handleLogWheel = useCallback(
+        (event: React.WheelEvent<HTMLDivElement>) => {
+            const modifierPressed = isMacOS() ? event.metaKey : event.ctrlKey
+            if (!modifierPressed) return
+
+            event.preventDefault()
+            adjustLogFontSize(event.deltaY < 0 ? LOG_FONT_SIZE_STEP : -LOG_FONT_SIZE_STEP)
+        },
+        [adjustLogFontSize],
+    )
+
     const maxLineWidth = useMemo(() => {
         if (wrapLines) return 0
         const maxChars = lines.reduce((max, line) => Math.max(max, withoutAnsiColors(line).length), 0)
-        return maxChars * CHAR_WIDTH + 8
-    }, [lines, wrapLines])
+        return maxChars * logCharWidth + 8
+    }, [lines, logCharWidth, wrapLines])
 
     const scrollToLine = useCallback(
         (lineIndex: number) => {
@@ -246,7 +307,8 @@ export const OutputPanel = ({
             <LogLineRow
                 key={`${animationEpoch}-${sourceLineIndex}`}
                 animationEpoch={animationEpoch}
-                lineHeight={LINE_HEIGHT}
+                fontSize={logFontSize}
+                lineHeight={logLineHeight}
                 rawLine={rawLine}
                 sourceLineIndex={sourceLineIndex}
                 wrapLines={wrapLines}
@@ -325,11 +387,17 @@ export const OutputPanel = ({
             </div>
             {toolbar}
             {displayLength === 0 ? (
-                <div className="flex-1 overflow-auto bg-log-bg px-4 py-8 text-center font-mono text-[13px] text-muted-foreground">
+                <div
+                    className="relative flex-1 overflow-auto bg-log-bg px-4 py-8 text-center font-mono text-muted-foreground"
+                    style={{ fontSize: logFontSize }}
+                    onWheel={handleLogWheel}
+                >
+                    {isLogZoomed ? <LogZoomResetButton label={zoomLabel} onReset={resetLogFontSize} /> : null}
                     No output yet.
                 </div>
             ) : (
-                <div className="min-h-0 flex-1 bg-log-bg py-4">
+                <div className="relative min-h-0 flex-1 bg-log-bg py-4" onWheel={handleLogWheel}>
+                    {isLogZoomed ? <LogZoomResetButton label={zoomLabel} onReset={resetLogFontSize} /> : null}
                     {wrapLines ? (
                         <Virtuoso
                             key={`wrap-${procId ?? "none"}-${theme}`}
@@ -349,7 +417,7 @@ export const OutputPanel = ({
                             totalCount={displayLength}
                             initialTopMostItemIndex={initialTopMostItemIndex}
                             itemContent={itemContent}
-                            fixedItemHeight={LINE_HEIGHT}
+                            fixedItemHeight={logLineHeight}
                             followOutput="auto"
                             components={hScrollComponents}
                             context={{ minWidth: maxLineWidth }}
@@ -360,6 +428,18 @@ export const OutputPanel = ({
         </div>
     )
 }
+
+const LogZoomResetButton = ({ label, onReset }: { label: string; onReset: () => void }) => (
+    <button
+        type="button"
+        onClick={onReset}
+        className="absolute right-4 top-3 z-10 flex items-center gap-1 rounded-md border border-accent/30 bg-card/95 px-2 py-1 font-mono text-[11px] text-accent shadow-lg backdrop-blur transition-colors hover:bg-surface-hover"
+        title="Reset log zoom"
+    >
+        <RotateCwIcon className="h-3.5 w-3.5" />
+        {label}
+    </button>
+)
 
 const renderLineWithAnsiAndHighlights = (
     rawLine: string,
