@@ -12,3 +12,10 @@ export type ProcConfig = {
 export type MprocsConfig = {
     procs: Record<string, ProcConfig>
 }
+
+export type PortOccupant = {
+    port: number
+    pid: number
+    command: string
+    detail?: string
+}

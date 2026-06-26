@@ -119,6 +119,17 @@ export const TerminalIcon = icon(
 
 export const PlayIcon = icon(<path d="m8 5 11 7-11 7V5Z" />)
 
+export const PlugZapIcon = icon(
+    <>
+        <path d="m13 2-2 6h4l-2 6" />
+        <path d="M7 6v5" />
+        <path d="M17 6v5" />
+        <path d="M7 11h10" />
+        <path d="M8 11v3a4 4 0 0 0 8 0v-3" />
+        <path d="M12 18v4" />
+    </>,
+)
+
 export const CopyIcon = icon(
     <>
         <rect x="9" y="9" width="13" height="13" rx="2" />

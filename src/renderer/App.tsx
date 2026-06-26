@@ -1,10 +1,12 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import { toast } from "sonner"
+import type { PortOccupant } from "../shared/types"
 import { ProcessList } from "./ProcessList"
 import { OutputPanel, type Match } from "./OutputPanel"
 import { SearchBar, type SearchMode } from "./SearchBar"
 import { XIcon } from "./icons"
 import { getOpenUrl } from "./utils/openUrl"
+import { findPortConflict } from "./utils/portConflicts"
 
 const MAX_LINES = 10_000
 const ANIMATION_SETTING_STORAGE_KEY = "oprocs:disable-log-animations"
@@ -15,6 +17,10 @@ export type ProcInfo = {
     status: "running" | "stopped"
     exitCode: number | null
     openUrl?: string
+    portConflict?: {
+        port: number
+        detectedAt: number
+    }
 }
 
 export type ConfigState = {
@@ -41,6 +47,8 @@ declare global {
             startProc: (procId: string) => Promise<{ ok: boolean; error?: string }>
             stopProc: (procId: string) => Promise<{ ok: boolean; error?: string }>
             restartProc: (procId: string) => Promise<{ ok: boolean; error?: string }>
+            getPortOccupant: (port: number) => Promise<PortOccupant | null>
+            killPortOccupant: (port: number) => Promise<{ ok: boolean; occupant?: PortOccupant; error?: string }>
             onProcessOutput: (fn: (data: { procId: string; text: string; isStderr: boolean }) => void) => void
             onProcStarted: (fn: (procId: string) => void) => void
             onProcStopped: (fn: (data: { procId: string; code: number | null }) => void) => void
@@ -238,12 +246,26 @@ export default function App() {
         ipcListenersRegistered.current = true
         api.onProcessOutput(({ procId, text }) => {
             const openUrl = getOpenUrl(text)
+            const portConflict = findPortConflict(text)
             if (openUrl)
                 setConfig((c) =>
                     c
                         ? {
                               ...c,
                               procs: c.procs.map((p) => (p.id === procId && p.openUrl == null ? { ...p, openUrl } : p)),
+                          }
+                        : c,
+                )
+            if (portConflict)
+                setConfig((c) =>
+                    c
+                        ? {
+                              ...c,
+                              procs: c.procs.map((p) =>
+                                  p.id === procId
+                                      ? { ...p, portConflict: { port: portConflict.port, detectedAt: Date.now() } }
+                                      : p,
+                              ),
                           }
                         : c,
                 )
@@ -256,7 +278,13 @@ export default function App() {
                           ...c,
                           procs: c.procs.map((p) =>
                               p.id === procId
-                                  ? { ...p, status: "running" as const, exitCode: null, openUrl: undefined }
+                                  ? {
+                                        ...p,
+                                        status: "running" as const,
+                                        exitCode: null,
+                                        openUrl: undefined,
+                                        portConflict: undefined,
+                                    }
                                   : p,
                           ),
                       }

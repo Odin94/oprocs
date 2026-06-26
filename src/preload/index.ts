@@ -7,6 +7,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     startProc: (procId: string) => ipcRenderer.invoke("start-proc", procId),
     stopProc: (procId: string) => ipcRenderer.invoke("stop-proc", procId),
     restartProc: (procId: string) => ipcRenderer.invoke("restart-proc", procId),
+    getPortOccupant: (port: number) => ipcRenderer.invoke("get-port-occupant", port),
+    killPortOccupant: (port: number) => ipcRenderer.invoke("kill-port-occupant", port),
     onProcessOutput: (fn: (data: { procId: string; text: string; isStderr: boolean }) => void) => {
         ipcRenderer.on("process-output", (_e, data) => fn(data))
     },

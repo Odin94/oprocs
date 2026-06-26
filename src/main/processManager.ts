@@ -1,11 +1,12 @@
-import { spawn, spawnSync, exec, execSync, type ChildProcess } from "child_process"
+import { spawn, spawnSync, exec, execFile, execSync, type ChildProcess } from "child_process"
 import { promisify } from "util"
 
 const execAsync = promisify(exec)
+const execFileAsync = promisify(execFile)
 import fs from "fs"
 import path from "path"
 import treeKill from "tree-kill"
-import type { ProcConfig } from "../shared/types.js"
+import type { PortOccupant, ProcConfig } from "../shared/types.js"
 import { log } from "./logger.js"
 import { type AppConfig, DEFAULT_APP_CONFIG, resolvePathTemplate } from "./appConfig.js"
 
@@ -14,6 +15,11 @@ const MAX_LINES = 10_000
 const sanitizeProcName = (name: string): string => name.replace(/[/\\:*?"<>|]/g, "-").replace(/\s+/g, "-") || "proc"
 
 const LOCK_FILE_NAME = ".oprocs.lock"
+
+const normalizePort = (port: number): number | null => {
+    if (!Number.isInteger(port) || port < 1 || port > 65535) return null
+    return port
+}
 
 const isCmdExe = (value: string): boolean => {
     const lower = value.toLowerCase()
@@ -282,6 +288,149 @@ export class ProcessManager {
                 resolve()
             })
         })
+    }
+
+    private parseLsofPortOccupants(port: number, stdout: string): PortOccupant[] {
+        const occupants: PortOccupant[] = []
+        let current: Partial<PortOccupant> = {}
+        const flush = () => {
+            if (current.pid != null) {
+                occupants.push({
+                    port,
+                    pid: current.pid,
+                    command: current.command || `pid ${current.pid}`,
+                    detail: current.detail,
+                })
+            }
+            current = {}
+        }
+
+        for (const rawLine of stdout.split(/\r?\n/)) {
+            const line = rawLine.trim()
+            if (!line) continue
+            const field = line[0]
+            const value = line.slice(1)
+            if (field === "p") {
+                flush()
+                const pid = Number(value)
+                if (Number.isInteger(pid)) current.pid = pid
+            } else if (field === "c") {
+                current.command = value
+            } else if (field === "n") {
+                current.detail = value
+            }
+        }
+        flush()
+        return occupants
+    }
+
+    private async getPortOccupantUnix(port: number): Promise<PortOccupant | null> {
+        try {
+            const { stdout } = await execFileAsync("lsof", ["-nP", `-iTCP:${port}`, "-sTCP:LISTEN", "-Fpcn"], {
+                encoding: "utf-8",
+                timeout: 5000,
+            })
+            const occupants = this.parseLsofPortOccupants(port, String(stdout))
+            return occupants[0] ?? null
+        } catch (err) {
+            log.debug("getPortOccupantUnix: lsof failed port=%s", port, err)
+            if (process.platform !== "linux") return null
+        }
+
+        try {
+            const { stdout } = await execFileAsync("ss", ["-ltnp", `sport = :${port}`], {
+                encoding: "utf-8",
+                timeout: 5000,
+            })
+            const match = /users:\(\("([^"]+)",pid=(\d+),/.exec(String(stdout))
+            if (!match) return null
+            return { port, pid: Number(match[2]), command: match[1], detail: `TCP *:${port}` }
+        } catch (err) {
+            log.debug("getPortOccupantUnix: ss failed port=%s", port, err)
+            return null
+        }
+    }
+
+    private parseNetstatPortOccupant(port: number, stdout: string): number | null {
+        for (const rawLine of stdout.split(/\r?\n/)) {
+            const line = rawLine.trim()
+            if (!line.toUpperCase().startsWith("TCP")) continue
+            const parts = line.split(/\s+/)
+            if (parts.length < 5) continue
+            const localAddress = parts[1]
+            const state = parts[3]
+            const pid = Number(parts[4])
+            if (!Number.isInteger(pid) || state.toUpperCase() !== "LISTENING") continue
+            if (localAddress.endsWith(`:${port}`)) return pid
+        }
+        return null
+    }
+
+    private parseTasklistCommand(stdout: string, pid: number): string {
+        const firstLine = stdout
+            .split(/\r?\n/)
+            .map((line) => line.trim())
+            .find(Boolean)
+        if (!firstLine || firstLine.toUpperCase().includes("INFO:")) return `pid ${pid}`
+        const csvMatch = /^"((?:[^"]|"")*)"/.exec(firstLine)
+        if (!csvMatch) return firstLine.split(/\s+/)[0] || `pid ${pid}`
+        return csvMatch[1].replace(/""/g, '"') || `pid ${pid}`
+    }
+
+    private async getPortOccupantWindows(port: number): Promise<PortOccupant | null> {
+        try {
+            const { stdout } = await execFileAsync("netstat.exe", ["-ano", "-p", "tcp"], {
+                encoding: "utf-8",
+                timeout: 5000,
+            })
+            const pid = this.parseNetstatPortOccupant(port, String(stdout))
+            if (pid == null) return null
+            let command = `pid ${pid}`
+            try {
+                const tasklist = await execFileAsync("tasklist.exe", ["/FI", `PID eq ${pid}`, "/FO", "CSV", "/NH"], {
+                    encoding: "utf-8",
+                    timeout: 5000,
+                })
+                command = this.parseTasklistCommand(String(tasklist.stdout), pid)
+            } catch (err) {
+                log.debug("getPortOccupantWindows: tasklist failed pid=%s", pid, err)
+            }
+            return { port, pid, command, detail: `TCP *:${port}` }
+        } catch (err) {
+            log.debug("getPortOccupantWindows: netstat failed port=%s", port, err)
+            return null
+        }
+    }
+
+    async getPortOccupant(port: number): Promise<PortOccupant | null> {
+        const normalized = normalizePort(port)
+        if (normalized == null) return null
+        return process.platform === "win32"
+            ? this.getPortOccupantWindows(normalized)
+            : this.getPortOccupantUnix(normalized)
+    }
+
+    async killPortOccupant(port: number): Promise<{ ok: boolean; occupant?: PortOccupant; error?: string }> {
+        const normalized = normalizePort(port)
+        if (normalized == null) return { ok: false, error: "Invalid port" }
+
+        const occupant = await this.getPortOccupant(normalized)
+        if (!occupant) return { ok: false, error: "No listening process found for that port" }
+
+        await this.killPid(occupant.pid, "SIGTERM")
+        await new Promise((resolve) => setTimeout(resolve, 500))
+
+        const stillOccupant = await this.getPortOccupant(normalized)
+        if (stillOccupant?.pid === occupant.pid) {
+            await this.killPid(occupant.pid, "SIGKILL")
+            await new Promise((resolve) => setTimeout(resolve, 300))
+            const remainingOccupant = await this.getPortOccupant(normalized)
+            if (remainingOccupant?.pid === occupant.pid) {
+                return { ok: false, occupant, error: `Could not kill pid ${occupant.pid}` }
+            }
+        }
+
+        return { ok: true, occupant }
     }
 
     readLock(): Record<string, number[]> | null {

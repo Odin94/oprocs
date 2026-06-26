@@ -1,4 +1,5 @@
 import { RefreshCwIcon, StopCircleIcon } from "./icons"
+import { TooltipButton } from "./TooltipButton"
 
 type ProcessListActionsProps = {
     onStopAll: () => void
@@ -17,13 +18,25 @@ export const ProcessListActions = ({
     restartAllDisabled,
 }: ProcessListActionsProps) => (
     <div className="cozy-sidebar-section flex shrink-0 gap-2 border-t border-border p-3">
-        <button type="button" onClick={onStopAll} disabled={stopAllDisabled} className={buttonCls}>
+        <TooltipButton
+            type="button"
+            onClick={onStopAll}
+            disabled={stopAllDisabled}
+            className={buttonCls}
+            tooltip="Stop all running processes"
+        >
             <StopCircleIcon className="h-3.5 w-3.5" />
             Stop All
-        </button>
-        <button type="button" onClick={onRestartAll} disabled={restartAllDisabled} className={buttonCls}>
+        </TooltipButton>
+        <TooltipButton
+            type="button"
+            onClick={onRestartAll}
+            disabled={restartAllDisabled}
+            className={buttonCls}
+            tooltip="Restart all processes"
+        >
             <RefreshCwIcon className="h-3.5 w-3.5" />
             Restart All
-        </button>
+        </TooltipButton>
     </div>
 )

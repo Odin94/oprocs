@@ -110,6 +110,8 @@ export const setupIpc = (pm: ProcessManager, options?: { startDir?: string; appC
     ipcMain.handle("start-proc", async (_event, procId: string) => pm.start(procId))
     ipcMain.handle("stop-proc", async (_event, procId: string) => pm.stop(procId))
     ipcMain.handle("restart-proc", async (_event, procId: string) => pm.restart(procId))
+    ipcMain.handle("get-port-occupant", async (_event, port: number) => pm.getPortOccupant(port))
+    ipcMain.handle("kill-port-occupant", async (_event, port: number) => pm.killPortOccupant(port))
 
     ipcMain.handle("updater-check", () => {
         checkForUpdates()

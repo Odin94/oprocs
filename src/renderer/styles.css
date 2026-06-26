@@ -297,6 +297,24 @@
     backdrop-filter: blur(8px);
 }
 
+.process-card-tooltip {
+    position: fixed;
+    z-index: 1000;
+    max-width: min(28rem, calc(100vw - 1rem));
+    transform: translateX(-50%);
+    border: 1px solid hsl(var(--border));
+    border-radius: 0.25rem;
+    background: hsl(var(--popover));
+    color: hsl(var(--popover-foreground));
+    padding: 0.25rem 0.45rem;
+    font-size: 0.75rem;
+    line-height: 1rem;
+    font-weight: 500;
+    white-space: nowrap;
+    pointer-events: none;
+    box-shadow: 0 8px 20px hsl(0 0% 0% / 0.28);
+}
+
 [data-theme="cozy"] .bg-log-bg {
     background: hsl(var(--log-bg) / 0.5);
     backdrop-filter: blur(8px);

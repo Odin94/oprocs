@@ -1,6 +1,10 @@
+import { useCallback, useEffect, useMemo, useState } from "react"
 import type { ProcInfo } from "./App"
-import { ExternalLinkIcon, FlowerIcon, PlayIcon, RotateCwIcon, SquareIcon, TerminalIcon } from "./icons"
+import type { PortOccupant } from "../shared/types"
+import { ExternalLinkIcon, FlowerIcon, PlayIcon, PlugZapIcon, RotateCwIcon, SquareIcon, TerminalIcon } from "./icons"
 import { ProcessListActions } from "./ProcessListActions"
+import { TooltipButton } from "./TooltipButton"
+import { toast } from "sonner"
 
 type ProcessListProps = {
     procs: ProcInfo[]
@@ -19,6 +23,12 @@ const api = window.electronAPI
 
 const chipButtonCls =
     "flex items-center gap-1 rounded-md border border-accent/30 bg-accent/10 px-1.5 py-0.5 text-[10px] font-medium text-accent transition-colors hover:bg-accent/20"
+
+type PortOccupantState = {
+    loading: boolean
+    occupant: PortOccupant | null
+    error?: string
+}
 
 function StatusDot({ proc }: { proc: ProcInfo }) {
     const className =
@@ -47,6 +57,91 @@ export const ProcessList = ({
     const stoppedProcs = procs.filter((proc) => proc.status === "stopped")
     const hasRunningProcs = runningProcs.length > 0
     const hasProcs = procs.length > 0
+    const [portOccupants, setPortOccupants] = useState<Record<number, PortOccupantState>>({})
+
+    const portConflictChecks = useMemo(
+        () =>
+            procs
+                .map((proc) =>
+                    proc.portConflict
+                        ? { procId: proc.id, port: proc.portConflict.port, detectedAt: proc.portConflict.detectedAt }
+                        : null,
+                )
+                .filter(
+                    (conflict): conflict is { procId: string; port: number; detectedAt: number } => conflict != null,
+                ),
+        [procs],
+    )
+
+    const fetchPortOccupant = useCallback(async (port: number) => {
+        if (!api) return
+        setPortOccupants((prev) => ({
+            ...prev,
+            [port]: { loading: true, occupant: prev[port]?.occupant ?? null },
+        }))
+        try {
+            const occupant = await api.getPortOccupant(port)
+            setPortOccupants((prev) => ({ ...prev, [port]: { loading: false, occupant } }))
+        } catch (err) {
+            const message = err instanceof Error ? err.message : String(err)
+            setPortOccupants((prev) => ({
+                ...prev,
+                [port]: { loading: false, occupant: null, error: message },
+            }))
+        }
+    }, [])
+
+    useEffect(() => {
+        for (const conflict of portConflictChecks) {
+            void fetchPortOccupant(conflict.port)
+        }
+    }, [portConflictChecks, fetchPortOccupant])
+
+    const portConflictTitle = (port: number) => {
+        const state = portOccupants[port]
+        if (state?.loading) return `Looking up process using port ${port}...`
+        if (state?.occupant) {
+            const { command, pid, detail } = state.occupant
+            return `Kill ${command} (pid ${pid}) using port ${port}${detail ? ` - ${detail}` : ""}`
+        }
+        if (state?.error) return `Could not inspect port ${port}: ${state.error}`
+        return `Find and kill process using port ${port}`
+    }
+
+    const handleKillPortOccupant = async (port: number) => {
+        if (!api) return
+        setPortOccupants((prev) => ({
+            ...prev,
+            [port]: { loading: true, occupant: prev[port]?.occupant ?? null },
+        }))
+        try {
+            const result = await api.killPortOccupant(port)
+            if (!result.ok) {
+                const message = result.error ?? `No listening process found for port ${port}`
+                setPortOccupants((prev) => ({
+                    ...prev,
+                    [port]: { loading: false, occupant: result.occupant ?? null, error: message },
+                }))
+                toast.error(message)
+                return
+            }
+
+            const occupant = result.occupant
+            toast.success(
+                occupant
+                    ? `Killed ${occupant.command} (pid ${occupant.pid}) on port ${port}`
+                    : `Killed process using port ${port}`,
+            )
+            await fetchPortOccupant(port)
+        } catch (err) {
+            const message = err instanceof Error ? err.message : String(err)
+            setPortOccupants((prev) => ({
+                ...prev,
+                [port]: { loading: false, occupant: null, error: message },
+            }))
+            toast.error(`Could not kill process using port ${port}`)
+        }
+    }
 
     const handleStopAll = () => {
         runningProcs.forEach((proc) => {
@@ -98,6 +193,7 @@ export const ProcessList = ({
                     type="button"
                     onClick={onOpenConfig}
                     className="cozy-sidebar-button flex w-full items-center justify-center rounded-md bg-surface px-3 py-2 text-xs font-medium text-secondary-foreground transition-colors hover:bg-surface-hover"
+                    title="Change config"
                 >
                     Change config
                 </button>
@@ -133,7 +229,7 @@ export const ProcessList = ({
                                             e.stopPropagation()
                                             void api?.openExternalLink(proc.openUrl!)
                                         }}
-                                        title={proc.openUrl}
+                                        title={`Open ${proc.openUrl}`}
                                     >
                                         <ExternalLinkIcon className="h-2.5 w-2.5" />
                                         Open
@@ -154,43 +250,60 @@ export const ProcessList = ({
                                     }`}
                                 >
                                     {proc.status === "stopped" ? (
-                                        <button
-                                            type="button"
+                                        <TooltipButton
                                             className="rounded p-1 text-muted-foreground transition-colors hover:bg-primary/20 hover:text-primary"
                                             onClick={(e) => {
                                                 e.stopPropagation()
                                                 void onStart(proc.id)
                                             }}
-                                            title="Start"
+                                            tooltip={`Start ${proc.name}`}
                                         >
                                             <PlayIcon className="h-3 w-3" />
-                                        </button>
+                                        </TooltipButton>
                                     ) : (
                                         <>
-                                            <button
-                                                type="button"
+                                            <TooltipButton
                                                 className="rounded p-1 text-muted-foreground transition-colors hover:bg-destructive/20 hover:text-destructive"
                                                 onClick={(e) => {
                                                     e.stopPropagation()
                                                     void onStop(proc.id)
                                                 }}
-                                                title="Stop"
+                                                tooltip={`Stop ${proc.name}`}
                                             >
                                                 <SquareIcon className="h-3 w-3" />
-                                            </button>
-                                            <button
-                                                type="button"
+                                            </TooltipButton>
+                                            <TooltipButton
                                                 className="rounded p-1 text-muted-foreground transition-colors hover:bg-primary/20 hover:text-primary"
                                                 onClick={(e) => {
                                                     e.stopPropagation()
                                                     void onRestart(proc.id)
                                                 }}
-                                                title="Restart"
+                                                tooltip={`Restart ${proc.name}`}
                                             >
                                                 <RotateCwIcon className="h-3 w-3" />
-                                            </button>
+                                            </TooltipButton>
                                         </>
                                     )}
+                                    {proc.portConflict
+                                        ? (() => {
+                                              const port = proc.portConflict.port
+                                              const portState = portOccupants[port]
+                                              if (!portState?.loading && !portState?.occupant) return null
+                                              return (
+                                                  <TooltipButton
+                                                      className="rounded p-1 text-muted-foreground transition-colors hover:bg-warning/20 hover:text-warning"
+                                                      onMouseEnter={() => void fetchPortOccupant(port)}
+                                                      onClick={(e) => {
+                                                          e.stopPropagation()
+                                                          void handleKillPortOccupant(port)
+                                                      }}
+                                                      tooltip={portConflictTitle(port)}
+                                                  >
+                                                      <PlugZapIcon className="h-3 w-3" />
+                                                  </TooltipButton>
+                                              )
+                                          })()
+                                        : null}
                                 </div>
                             </div>
                         </div>
