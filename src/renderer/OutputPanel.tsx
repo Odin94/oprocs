@@ -71,7 +71,11 @@ const MinWidthList = React.forwardRef<
     React.HTMLAttributes<HTMLDivElement> & { context?: { minWidth: number } }
 >(({ style, context, ...props }, ref) => <div ref={ref} style={{ ...style, minWidth: context?.minWidth }} {...props} />)
 
-const wrapComponents = { Scroller: LogScroller }
+const WrapList = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>((props, ref) => (
+    <div ref={ref} {...props} />
+))
+
+const wrapComponents = { Scroller: LogScroller, List: WrapList }
 const hScrollComponents = { Scroller: HScrollScroller, List: MinWidthList }
 const MAX_LOG_LINE_ANIMATION_DELAY_MS = 300
 const LOG_LINE_ANIMATION_DURATION_MS = 500
