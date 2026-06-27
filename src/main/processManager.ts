@@ -9,6 +9,7 @@ import treeKill from "tree-kill"
 import type { PortOccupant, ProcConfig } from "../shared/types.js"
 import { log } from "./logger.js"
 import { type AppConfig, DEFAULT_APP_CONFIG, resolvePathTemplate } from "./appConfig.js"
+import type { ProcessWatchdog } from "./processWatchdog.js"
 
 const MAX_LINES = 10_000
 
@@ -79,6 +80,12 @@ type ProcState = {
     pidsForLock?: number[]
 }
 
+type StopOptions = {
+    skipPersistLock?: boolean
+    waitMs?: number
+    escalateAfterWait?: boolean
+}
+
 export type ProcessManagerEvents = {
     output: (data: { procId: string; text: string; isStderr: boolean }) => void
     started: (procId: string) => void
@@ -94,7 +101,10 @@ export class ProcessManager {
         stopped: () => {},
     }
 
-    constructor(private appConfig: AppConfig = DEFAULT_APP_CONFIG) {}
+    constructor(
+        private appConfig: AppConfig = DEFAULT_APP_CONFIG,
+        private watchdog?: ProcessWatchdog,
+    ) {}
 
     on(events: Partial<ProcessManagerEvents>) {
         this.listeners = { ...this.listeners, ...events }
@@ -187,7 +197,7 @@ export class ProcessManager {
         await Promise.all(
             [...allPids].map((pid) => {
                 log.debug("killPidsFromLock: killing pid=%s", pid)
-                return this.killPid(pid)
+                return this.killProcessTree(pid)
             }),
         )
     }
@@ -288,6 +298,64 @@ export class ProcessManager {
                 resolve()
             })
         })
+    }
+
+    private killProcessGroup(pid: number, signal: string): void {
+        if (process.platform === "win32") return
+        try {
+            log.debug("killProcessGroup: pid=%s signal=%s", pid, signal)
+            process.kill(-pid, signal as NodeJS.Signals)
+        } catch (err) {
+            const code =
+                err && typeof err === "object" && "code" in err ? (err as NodeJS.ErrnoException).code : undefined
+            if (code !== "ESRCH") log.debug("killProcessGroup: pid=%s error=%s", pid, code ?? err)
+        }
+    }
+
+    private killProcessGroupSync(pid: number, signal: string): void {
+        if (process.platform === "win32") return
+        try {
+            process.kill(-pid, signal as NodeJS.Signals)
+        } catch (err) {
+            const code =
+                err && typeof err === "object" && "code" in err ? (err as NodeJS.ErrnoException).code : undefined
+            if (code !== "ESRCH") log.debug("killProcessGroupSync: pid=%s error=%s", pid, code ?? err)
+        }
+    }
+
+    private killWindowsProcessTreeSync(pid: number): void {
+        const taskkillExe = path.join(process.env.SystemRoot ?? "C:\\Windows", "System32", "taskkill.exe")
+        spawnSync(taskkillExe, ["/pid", String(pid), "/T", "/F"], {
+            stdio: "ignore",
+            windowsHide: true,
+            timeout: 5000,
+        })
+    }
+
+    private async killProcessTree(pid: number, signal: string = "SIGTERM"): Promise<void> {
+        if (process.platform === "win32") {
+            this.killWindowsProcessTreeSync(pid)
+            return
+        }
+
+        this.killProcessGroup(pid, signal)
+        await this.killPid(pid, signal)
+    }
+
+    private killProcessTreeSync(pid: number, signal: string = "SIGKILL"): void {
+        if (process.platform === "win32") {
+            this.killWindowsProcessTreeSync(pid)
+            return
+        }
+
+        this.killProcessGroupSync(pid, signal)
+        try {
+            process.kill(pid, signal as NodeJS.Signals)
+        } catch (err) {
+            const code =
+                err && typeof err === "object" && "code" in err ? (err as NodeJS.ErrnoException).code : undefined
+            if (code !== "ESRCH") log.debug("killProcessTreeSync: pid=%s error=%s", pid, code ?? err)
+        }
     }
 
     private parseLsofPortOccupants(port: number, stdout: string): PortOccupant[] {
@@ -552,6 +620,7 @@ export class ProcessManager {
                     env,
                     stdio: ["ignore", "pipe", "pipe"],
                     shell: false,
+                    detached: process.platform !== "win32",
                 }
                 if (process.platform === "win32") {
                     ;(spawnOpts as { windowsVerbatimArguments?: boolean }).windowsVerbatimArguments = true
@@ -565,6 +634,7 @@ export class ProcessManager {
                     env,
                     stdio: ["ignore", "pipe", "pipe"],
                     shell: false,
+                    detached: process.platform !== "win32",
                 })
             } else {
                 return { ok: false, error: "Process has neither shell nor cmd" }
@@ -573,6 +643,7 @@ export class ProcessManager {
             const message = err instanceof Error ? err.message : String(err)
             return { ok: false, error: message }
         }
+        if (child.pid != null) this.watchdog?.track(child.pid)
 
         const logDir = this.resolveLogDir(configDir)
         let logStream: fs.WriteStream | null = null
@@ -661,7 +732,24 @@ export class ProcessManager {
         return { ok: true }
     }
 
-    stop(procId: string, options?: { skipPersistLock?: boolean }): { ok: boolean; error?: string } {
+    private waitForClose(handle: ChildProcess, timeoutMs: number): Promise<boolean> {
+        return new Promise((resolve) => {
+            let settled = false
+            let timeout: NodeJS.Timeout | undefined
+            const finish = (closed: boolean) => {
+                if (settled) return
+                settled = true
+                if (timeout) clearTimeout(timeout)
+                handle.off("close", onClose)
+                resolve(closed)
+            }
+            const onClose = () => finish(true)
+            handle.once("close", onClose)
+            timeout = setTimeout(() => finish(false), timeoutMs)
+        })
+    }
+
+    async stop(procId: string, options?: StopOptions): Promise<{ ok: boolean; error?: string }> {
         const state = this.procs.get(procId)
         if (!state) return { ok: false, error: "Unknown process" }
         const handle = state.proc
@@ -677,35 +765,28 @@ export class ProcessManager {
 
         const stop = state.config.stop ?? "SIGTERM"
         const signal = stop === "hard-kill" ? "SIGKILL" : stop
-        if (process.platform === "win32") {
-            const taskkillExe = path.join(process.env.SystemRoot ?? "C:\\Windows", "System32", "taskkill.exe")
-            spawnSync(taskkillExe, ["/pid", String(rootPid), "/T", "/F"], {
-                stdio: "ignore",
-                windowsHide: true,
-                timeout: 5000,
-            })
-        } else {
-            try {
-                process.kill(rootPid, signal as NodeJS.Signals)
-            } catch {
-                // process may already be gone
-            }
-        }
+        const waitForClose =
+            isSpawnedHandle(handle) && options?.waitMs != null ? this.waitForClose(handle, options.waitMs) : null
+        await this.killProcessTree(rootPid, signal)
 
         if (!isSpawnedHandle(handle)) {
             this.finalizeStoppedProc(state, procId, null)
             return { ok: true }
         }
         if (!options?.skipPersistLock) this.persistLock()
+        const closed = waitForClose ? await waitForClose : true
+        if (!closed && options?.escalateAfterWait && signal !== "SIGKILL") {
+            const hardKillClose = this.waitForClose(handle, this.shutdownKillWaitMs)
+            await this.killProcessTree(rootPid, "SIGKILL")
+            await hardKillClose
+        }
         return { ok: true }
     }
 
-    restart(procId: string): Promise<{ ok: boolean; error?: string }> {
-        this.stop(procId)
+    async restart(procId: string): Promise<{ ok: boolean; error?: string }> {
+        await this.stop(procId, { waitMs: 300 })
         this.appendSystemLine(procId, "[oprocs] restarted")
-        return new Promise((resolve) => {
-            setTimeout(() => resolve(this.start(procId)), 300)
-        })
+        return this.start(procId)
     }
 
     getLines(procId: string): string[] {
@@ -757,51 +838,67 @@ export class ProcessManager {
         return false
     }
 
-    unregister(procId: string) {
-        this.stop(procId)
+    async unregister(procId: string) {
+        await this.stop(procId)
         this.procs.delete(procId)
     }
 
-    unregisterAll() {
+    async unregisterAll() {
         log.debug("unregisterAll: stopping %s procs (skipPersistLock=true)", this.procs.size)
-        for (const id of this.procs.keys()) {
-            this.stop(id, { skipPersistLock: true })
-        }
+        await Promise.all([...this.procs.keys()].map((id) => this.stop(id, { skipPersistLock: true })))
         this.procs.clear()
     }
 
     private readonly shutdownWaitMs = 5000
+    private readonly shutdownKillWaitMs = 1000
 
-    shutdown(): Promise<void> {
+    async shutdown(): Promise<void> {
         const running: [string, ProcHandle][] = []
         for (const [id, state] of this.procs.entries()) {
             if (state.proc) running.push([id, state.proc])
         }
         if (running.length === 0) {
             this.procs.clear()
-            return Promise.resolve()
+            this.watchdog?.shutdown()
+            return
         }
-        const waitForClose = (handle: ProcHandle) =>
-            isSpawnedHandle(handle)
-                ? new Promise<void>((resolve) => {
-                      handle.once("close", () => resolve())
-                      setTimeout(resolve, this.shutdownWaitMs)
-                  })
-                : Promise.resolve()
-        for (const [procId] of running) {
-            this.stop(procId)
-        }
-        return Promise.all(running.map(([, handle]) => waitForClose(handle))).then(() => {
-            const lockPath = this.getLockPath()
-            this.procs.clear()
-            if (fs.existsSync(lockPath)) {
-                try {
-                    fs.unlinkSync(lockPath)
-                    log.debug("shutdown: removed lock file %s", lockPath)
-                } catch (err) {
-                    log.debug("shutdown: failed to remove lock file %s", err)
-                }
+        await Promise.all(
+            running.map(([procId]) =>
+                this.stop(procId, {
+                    waitMs: this.shutdownWaitMs,
+                    escalateAfterWait: true,
+                }),
+            ),
+        )
+        const lockPath = this.getLockPath()
+        this.procs.clear()
+        if (fs.existsSync(lockPath)) {
+            try {
+                fs.unlinkSync(lockPath)
+                log.debug("shutdown: removed lock file %s", lockPath)
+            } catch (err) {
+                log.debug("shutdown: failed to remove lock file %s", err)
             }
-        })
+        }
+        this.watchdog?.shutdown()
+    }
+
+    shutdownSync() {
+        const rootPids: number[] = []
+        for (const state of this.procs.values()) {
+            const pid = state.proc?.pid
+            if (pid != null) rootPids.push(pid)
+        }
+        for (const pid of rootPids) {
+            this.killProcessTreeSync(pid)
+        }
+        const lockPath = this.getLockPath()
+        this.procs.clear()
+        try {
+            if (fs.existsSync(lockPath)) fs.unlinkSync(lockPath)
+        } catch (err) {
+            log.debug("shutdownSync: failed to remove lock file %s", err)
+        }
+        this.watchdog?.shutdown()
     }
 }

@@ -3,7 +3,16 @@ import react from "@vitejs/plugin-react"
 import path from "path"
 
 export default defineConfig({
-    main: {},
+    main: {
+        build: {
+            rollupOptions: {
+                input: {
+                    index: path.resolve(__dirname, "src/main/index.ts"),
+                    watchdog: path.resolve(__dirname, "src/main/watchdog.ts"),
+                },
+            },
+        },
+    },
     preload: {
         build: {
             rollupOptions: {

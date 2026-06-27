@@ -74,7 +74,7 @@ export const setupIpc = (pm: ProcessManager, options?: { startDir?: string; appC
                 })
             }
         }
-        pm.unregisterAll()
+        await pm.unregisterAll()
 
         const procs = Object.entries(loaded.config.procs).map(([id, procConfig]) => ({
             id,

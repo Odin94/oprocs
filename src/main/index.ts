@@ -6,6 +6,7 @@ import { setupIpc } from "./ipc.js"
 import { setupUpdater } from "./updater.js"
 import { loadAppConfig, initConfig } from "./appConfig.js"
 import { setQuiet } from "./logger.js"
+import { ProcessWatchdogClient } from "./processWatchdog.js"
 
 if (process.argv.includes("init-config")) {
     initConfig()
@@ -35,7 +36,9 @@ if (appConfig.quiet) setQuiet(true)
 
 const isDev = process.env.NODE_ENV === "development" || !app.isPackaged
 
-const pm = new ProcessManager(appConfig)
+const watchdog = new ProcessWatchdogClient(path.join(__dirname, "watchdog.js"))
+watchdog.start()
+const pm = new ProcessManager(appConfig, watchdog)
 setupIpc(pm, { startDir: parseDirectoryArg(), appConfig })
 
 const createWindow = () => {
@@ -76,20 +79,32 @@ app.whenReady().then(() => {
 })
 
 app.on("window-all-closed", () => {
-    if (process.platform !== "darwin") app.quit()
+    app.quit()
 })
 
 let isShuttingDown = false
-app.on("before-quit", (e) => {
+const shutdownAndExit = (exit: (code: number) => void) => {
     if (isShuttingDown) return
-    e.preventDefault()
     isShuttingDown = true
-    pm.shutdown().then(() => app.exit(0))
+    pm.shutdown()
+        .catch((err) => {
+            console.error("Failed to stop child processes during shutdown", err)
+            pm.shutdownSync()
+        })
+        .finally(() => exit(0))
+}
+
+app.on("before-quit", (e) => {
+    e.preventDefault()
+    if (isShuttingDown) return
+    shutdownAndExit((code) => app.exit(code))
 })
 
-// TODOdin: Consider using prctl on linux exit processes when oprocs is hard killed (consider how that affects the lock file)
 const onSignal = () => {
-    pm.shutdown().then(() => process.exit(0))
+    shutdownAndExit((code) => process.exit(code))
 }
 process.on("SIGTERM", onSignal)
 process.on("SIGINT", onSignal)
+process.on("exit", () => {
+    pm.shutdownSync()
+})
