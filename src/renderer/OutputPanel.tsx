@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSta
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso"
 import { CheckIcon, CopyIcon, ExternalLinkIcon, RotateCwIcon, WrapTextIcon } from "./icons"
 import { parseAnsiToSegments, withoutAnsiColors, type AnsiSegment } from "./utils/ansi"
+import { openExternalLink } from "./utils/externalLinks"
 import { extractUrls, findUrlMatches } from "./utils/links"
 
 const LINE_HEIGHT = 20
@@ -392,7 +393,7 @@ export const OutputPanel = ({
                             <button
                                 key={url}
                                 type="button"
-                                onClick={() => void window.electronAPI?.openExternalLink(url)}
+                                onClick={() => openExternalLink(url)}
                                 className="flex max-w-[220px] items-center gap-1 rounded-md border border-accent/30 bg-accent/10 px-2 py-1 text-[11px] font-medium text-accent transition-colors hover:bg-accent/20"
                                 title={url}
                             >
@@ -541,7 +542,7 @@ const renderLineWithAnsiAndHighlights = (
                     <button
                         key={index}
                         type="button"
-                        onClick={() => void window.electronAPI?.openExternalLink(urlMatch.url)}
+                        onClick={() => openExternalLink(urlMatch.url)}
                         className="inline cursor-pointer rounded-sm underline decoration-accent/40 underline-offset-2 transition-colors hover:text-accent hover:decoration-accent"
                         title={urlMatch.url}
                     >

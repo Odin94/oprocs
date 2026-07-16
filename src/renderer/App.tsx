@@ -1,8 +1,8 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from "react"
+import { lazy, Suspense, useState, useEffect, useRef, useCallback, useMemo } from "react"
 import { toast } from "sonner"
 import type { PortOccupant } from "../shared/types"
 import { ProcessList } from "./ProcessList"
-import { OutputPanel, type Match } from "./OutputPanel"
+import type { Match } from "./OutputPanel"
 import { SearchBar, type SearchMode } from "./SearchBar"
 import { XIcon } from "./icons"
 import { getOpenUrl } from "./utils/openUrl"
@@ -10,6 +10,7 @@ import { findPortConflict } from "./utils/portConflicts"
 
 const MAX_LINES = 10_000
 const ANIMATION_SETTING_STORAGE_KEY = "oprocs:disable-log-animations"
+const OutputPanel = lazy(() => import("./OutputPanel").then((module) => ({ default: module.OutputPanel })))
 
 export type ProcInfo = {
     id: string
@@ -31,7 +32,7 @@ export type ConfigState = {
 
 declare global {
     interface Window {
-        electronAPI?: {
+        oprocsAPI?: {
             getAppConfig: () => Promise<{ disable_animations?: boolean }>
             getDefaultConfigPath: () => Promise<string | null>
             loadConfig: (configPath: string) => Promise<
@@ -62,7 +63,7 @@ declare global {
     }
 }
 
-const api = window.electronAPI
+const api = window.oprocsAPI
 
 const readStoredDisableAnimations = () => {
     try {
@@ -88,6 +89,7 @@ export default function App() {
     const [config, setConfig] = useState<ConfigState>(null)
     const [selectedProcId, setSelectedProcId] = useState<string | null>(null)
     const [outputByProc, setOutputByProc] = useState<Record<string, string>>({})
+    const hasConfig = config !== null
 
     const [searchQuery, setSearchQuery] = useState("")
     const [searchMode, setSearchMode] = useState<SearchMode>("substring")
@@ -124,6 +126,7 @@ export default function App() {
     )
 
     useEffect(() => {
+        if (!hasConfig) return
         workerRef.current = new Worker(new URL("./workers/search.worker.ts", import.meta.url), { type: "module" })
         const w = workerRef.current
         w.onmessage = (e: MessageEvent<{ id: number; matches: Match[]; filteredLineIndices: number[] }>) => {
@@ -138,7 +141,7 @@ export default function App() {
             w.terminate()
             workerRef.current = null
         }
-    }, [])
+    }, [hasConfig])
 
     useEffect(() => {
         runSearch()
@@ -202,13 +205,6 @@ export default function App() {
     )
 
     useEffect(() => {
-        if (!api) return
-        api.getAppConfig().then((appConfig) => {
-            setDisableAnimations(readStoredDisableAnimations() ?? appConfig.disable_animations ?? false)
-        })
-    }, [])
-
-    useEffect(() => {
         document.documentElement.dataset.animations = disableAnimations ? "off" : "on"
     }, [disableAnimations])
 
@@ -239,6 +235,13 @@ export default function App() {
             })
         })
     }, [config, applyLoadedConfig])
+
+    useEffect(() => {
+        if (!api) return
+        api.getAppConfig().then((appConfig) => {
+            setDisableAnimations(readStoredDisableAnimations() ?? appConfig.disable_animations ?? false)
+        })
+    }, [])
 
     const ipcListenersRegistered = useRef(false)
     useEffect(() => {
@@ -378,42 +381,45 @@ export default function App() {
                     onOpenConfig={openConfig}
                 />
                 <main className="flex min-w-0 flex-1 flex-col">
-                    <OutputPanel
-                        procId={selectedProcId}
-                        procName={config.procs.find((p) => p.id === selectedProcId)?.name ?? ""}
-                        disableAnimations={disableAnimations}
-                        status={config.procs.find((p) => p.id === selectedProcId)?.status}
-                        exitCode={config.procs.find((p) => p.id === selectedProcId)?.exitCode}
-                        openUrl={config.procs.find((p) => p.id === selectedProcId)?.openUrl}
-                        lines={lines}
-                        matches={matches}
-                        filteredIndices={filteredIndices}
-                        filterLines={filterLines}
-                        currentMatchIndex={currentMatchIndex}
-                        toolbar={
-                            <SearchBar
-                                query={searchQuery}
-                                setQuery={setSearchQuery}
-                                mode={searchMode}
-                                setMode={setSearchMode}
-                                caseSensitive={caseSensitive}
-                                setCaseSensitive={setCaseSensitive}
-                                filterLines={filterLines}
-                                setFilterLines={setFilterLines}
-                                matchCount={matches.length}
-                                currentMatchIndex={currentMatchIndex}
-                                onNext={handleNextMatch}
-                                onPrev={handlePrevMatch}
-                                onSearch={(q) => runSearch(q)}
-                                hasOutput={!!selectedProcId && !!(outputByProc[selectedProcId] ?? "").trim()}
-                                onClearOutput={clearOutputForCurrentProc}
-                                canUndoClear={
-                                    clearedOutputSnapshot !== null && clearedOutputSnapshot.procId === selectedProcId
-                                }
-                                onUndoClear={undoClearOutput}
-                            />
-                        }
-                    />
+                    <Suspense fallback={<div className="min-h-0 flex-1 bg-log-bg" />}>
+                        <OutputPanel
+                            procId={selectedProcId}
+                            procName={config.procs.find((p) => p.id === selectedProcId)?.name ?? ""}
+                            disableAnimations={disableAnimations}
+                            status={config.procs.find((p) => p.id === selectedProcId)?.status}
+                            exitCode={config.procs.find((p) => p.id === selectedProcId)?.exitCode}
+                            openUrl={config.procs.find((p) => p.id === selectedProcId)?.openUrl}
+                            lines={lines}
+                            matches={matches}
+                            filteredIndices={filteredIndices}
+                            filterLines={filterLines}
+                            currentMatchIndex={currentMatchIndex}
+                            toolbar={
+                                <SearchBar
+                                    query={searchQuery}
+                                    setQuery={setSearchQuery}
+                                    mode={searchMode}
+                                    setMode={setSearchMode}
+                                    caseSensitive={caseSensitive}
+                                    setCaseSensitive={setCaseSensitive}
+                                    filterLines={filterLines}
+                                    setFilterLines={setFilterLines}
+                                    matchCount={matches.length}
+                                    currentMatchIndex={currentMatchIndex}
+                                    onNext={handleNextMatch}
+                                    onPrev={handlePrevMatch}
+                                    onSearch={(q) => runSearch(q)}
+                                    hasOutput={!!selectedProcId && !!(outputByProc[selectedProcId] ?? "").trim()}
+                                    onClearOutput={clearOutputForCurrentProc}
+                                    canUndoClear={
+                                        clearedOutputSnapshot !== null &&
+                                        clearedOutputSnapshot.procId === selectedProcId
+                                    }
+                                    onUndoClear={undoClearOutput}
+                                />
+                            }
+                        />
+                    </Suspense>
                 </main>
             </div>
             {settingsOpen ? (

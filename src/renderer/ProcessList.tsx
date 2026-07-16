@@ -4,6 +4,7 @@ import type { PortOccupant } from "../shared/types"
 import { ExternalLinkIcon, FlowerIcon, PlayIcon, PlugZapIcon, RotateCwIcon, SquareIcon, TerminalIcon } from "./icons"
 import { ProcessListActions } from "./ProcessListActions"
 import { TooltipButton } from "./TooltipButton"
+import { openExternalLink } from "./utils/externalLinks"
 import { toast } from "sonner"
 
 type ProcessListProps = {
@@ -19,7 +20,7 @@ type ProcessListProps = {
     onOpenConfig: () => void
 }
 
-const api = window.electronAPI
+const api = window.oprocsAPI
 
 const chipButtonCls =
     "flex items-center gap-1 rounded-md border border-accent/30 bg-accent/10 px-1.5 py-0.5 text-[10px] font-medium text-accent transition-colors hover:bg-accent/20"
@@ -227,7 +228,7 @@ export const ProcessList = ({
                                         className={`${chipButtonCls} cozy-sidebar-chip`}
                                         onClick={(e) => {
                                             e.stopPropagation()
-                                            void api?.openExternalLink(proc.openUrl!)
+                                            openExternalLink(proc.openUrl!)
                                         }}
                                         title={`Open ${proc.openUrl}`}
                                     >

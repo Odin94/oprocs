@@ -13,10 +13,7 @@
         "strict": true,
         "noUnusedLocals": true,
         "noUnusedParameters": true,
-        "noFallthroughCasesInSwitch": true,
-        "paths": {
-            "@shared/*": ["./src/shared/*"]
-        }
+        "noFallthroughCasesInSwitch": true
     },
     "include": ["src/**/*.ts", "src/**/*.tsx"]
 }
