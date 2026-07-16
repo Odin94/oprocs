@@ -4,6 +4,7 @@ import type { PortOccupant } from "../shared/types"
 import { ExternalLinkIcon, FlowerIcon, PlayIcon, PlugZapIcon, RotateCwIcon, SquareIcon, TerminalIcon } from "./icons"
 import { ProcessListActions } from "./ProcessListActions"
 import { TooltipButton } from "./TooltipButton"
+import { openExternalLink } from "./utils/externalLinks"
 import { toast } from "sonner"
 
 type ProcessListProps = {
@@ -227,7 +228,7 @@ export const ProcessList = ({
                                         className={`${chipButtonCls} cozy-sidebar-chip`}
                                         onClick={(e) => {
                                             e.stopPropagation()
-                                            void api?.openExternalLink(proc.openUrl!)
+                                            openExternalLink(proc.openUrl!)
                                         }}
                                         title={`Open ${proc.openUrl}`}
                                     >
