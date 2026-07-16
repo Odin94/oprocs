@@ -2378,7 +2378,7 @@ checksum = "7c87def4c32ab89d880effc9e097653c8da5d6ef28e6b539d313baaacfbafcbe"
 
 [[package]]
 name = "oprocs"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "dirs",
  "indexmap 2.14.0",
