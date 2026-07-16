@@ -11,15 +11,21 @@ pnpm install
 pnpm run dev
 ```
 
+The desktop shell is built with Tauri 2 and Rust. Install the platform prerequisites from the
+[Tauri prerequisites guide](https://v2.tauri.app/start/prerequisites/) before starting development.
+
+To run only the Vite frontend in a browser, use `pnpm run dev:web`. Native process controls are available only inside
+the Tauri app.
+
 ## Build
 
 ```bash
-pnpm run build:win
-pnpm run build:mac
-pnpm run build:linux
+pnpm run build:app
 ```
 
-Built installers go to `release/<version>/`. The app auto-updates from [GitHub Releases](https://github.com/Odin94/oprocs/releases).
+Tauri writes installers to `src-tauri/target/release/bundle/`. Builds are platform-native; use `pnpm run build:win`,
+`pnpm run build:mac`, or `pnpm run build:linux` on the corresponding operating system when you only want that
+platform's installer. The app auto-updates from [GitHub Releases](https://github.com/Odin94/oprocs/releases).
 
 For publishing a release, see [RELEASING.md](./RELEASING.md).
 

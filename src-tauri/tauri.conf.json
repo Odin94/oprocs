@@ -1,0 +1,41 @@
+{
+    "$schema": "https://schema.tauri.app/config/2",
+    "productName": "oprocs",
+    "version": "0.3.1",
+    "identifier": "com.oprocs.app",
+    "build": {
+        "beforeDevCommand": "pnpm dev:web",
+        "devUrl": "http://localhost:5173",
+        "beforeBuildCommand": "pnpm build",
+        "frontendDist": "../dist"
+    },
+    "app": {
+        "windows": [
+            {
+                "title": "oprocs",
+                "width": 1200,
+                "height": 800,
+                "minWidth": 760,
+                "minHeight": 480
+            }
+        ],
+        "security": {
+            "csp": null
+        }
+    },
+    "bundle": {
+        "active": true,
+        "targets": "all",
+        "createUpdaterArtifacts": true,
+        "icon": ["../assets/plant.png", "../assets/plant.icns", "../assets/icon.ico"],
+        "macOS": {
+            "minimumSystemVersion": "10.15"
+        }
+    },
+    "plugins": {
+        "updater": {
+            "endpoints": ["https://github.com/Odin94/oprocs/releases/latest/download/latest.json"],
+            "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEQ2REI1NkY0RTQzMEQyNzUKUldSMTBqRGs5RmJiMXNvSDgyM3NLQU1zY1U3VUFNMTNaaS83SjJaR3NxRzB0djZ5eHNMNnlyYTYK"
+        }
+    }
+}

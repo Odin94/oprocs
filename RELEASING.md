@@ -1,10 +1,20 @@
 # Release Process
 
-Releases are built and published from your local machine using electron-builder, which uploads artifacts directly to GitHub Releases via the GitHub API.
+Releases are built with Tauri. Each platform build produces its installer, updater archive, and signature under
+`src-tauri/target/release/bundle/`.
 
 ## Prerequisites
 
-Copy `.env.sample` to `.env` and set `GH_TOKEN` to a GitHub personal access token with `repo` scope.
+Store the updater private key in a secure secret manager. The matching public key is committed in
+`src-tauri/tauri.conf.json`. For a local build, export:
+
+```sh
+export TAURI_SIGNING_PRIVATE_KEY=/secure/path/to/oprocs.key
+export TAURI_SIGNING_PRIVATE_KEY_PASSWORD='your-key-password'
+```
+
+The development key generated during the migration is ignored under `.tauri-local/`; replace the public key before
+the first production release if that local private key will not be retained.
 
 ## How to cut a release
 
@@ -18,10 +28,8 @@ pnpm run version:minor  # 0.1.1 -> 0.2.0  (new features, backwards-compatible)
 pnpm run version:major  # 0.1.1 -> 1.0.0  (breaking changes)
 ```
 
-This command:
-
-- Updates `version` in `package.json`
-- Creates a commit and git tag: `v0.1.2`
+These scripts update `package.json`, `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock`, and
+`src-tauri/tauri.conf.json` together. Commit the version changes and create the matching `v0.3.2` tag.
 
 ### 2. Push the commit and tag
 
@@ -31,15 +39,33 @@ git push && git push --tags
 
 ### 3. Build and publish
 
-Run the release script for each platform you want to publish. Each command builds the app and uploads the artifact directly to the GitHub Release for the current version tag:
+Run the release build on each target operating system:
 
 ```sh
-pnpm run release:win
-pnpm run release:mac
-pnpm run release:linux
+pnpm run build:win
+pnpm run build:mac
+pnpm run build:linux
 ```
 
-> **Note:** macOS and Linux builds must be run on their respective platforms. Windows builds can be cross-compiled from any platform.
+Upload each installer, updater archive, and `.sig` file to the GitHub release. Create a `latest.json` whose platform
+entries contain the release URL and the literal contents of each `.sig` file:
+
+```json
+{
+    "version": "0.3.2",
+    "notes": "Release notes",
+    "pub_date": "2026-07-15T00:00:00Z",
+    "platforms": {
+        "darwin-aarch64": {
+            "url": "https://github.com/Odin94/oprocs/releases/download/v0.3.2/oprocs.app.tar.gz",
+            "signature": "contents of oprocs.app.tar.gz.sig"
+        }
+    }
+}
+```
+
+Add entries for every released `OS-ARCH` pair and upload `latest.json` to the same release. Tauri Action can generate
+this static manifest automatically if releases are moved to GitHub Actions later.
 
 ### 4. Edit the release notes (optional)
 
@@ -50,16 +76,15 @@ https://github.com/Odin94/oprocs/releases (adjust for your repository)
 
 When a new release is published, existing installs check GitHub on startup (after a 3-second delay). If a newer version is available, it downloads in the background and prompts the user to restart.
 
-The update metadata files (`latest.yml`, `latest-mac.yml`, `latest-linux.yml`) are uploaded automatically by electron-builder as part of each release.
+The app checks `latest.json` three seconds after launch, verifies the downloaded artifact with the configured updater
+public key, and offers to restart after the update is ready.
 
 ## Artifact naming
 
-| Platform | Artifact                             |
-| -------- | ------------------------------------ |
-| Windows  | `oprocs-Windows-{version}-Setup.exe` |
-| macOS    | `oprocs-Mac-{version}.dmg`           |
-| Linux    | `oprocs-Linux-{version}.AppImage`    |
+Tauri's bundle directories contain the native installer names and their updater archives. Keep the generated names
+when uploading them because `latest.json` points at those assets.
 
 ## macOS code signing (future)
 
-macOS builds are currently unsigned. Users must right-click -> Open the first time to bypass Gatekeeper. To fix this, add `CSC_LINK` (p12 certificate) and `CSC_KEY_PASSWORD` to your `.env` and configure the `mac.identity` field in `package.json`.
+Updater signing does not replace Apple code signing or notarization. Configure the relevant Tauri macOS signing
+environment variables before distributing outside local development.

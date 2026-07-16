@@ -19,7 +19,7 @@ type ProcessListProps = {
     onOpenConfig: () => void
 }
 
-const api = window.electronAPI
+const api = window.oprocsAPI
 
 const chipButtonCls =
     "flex items-center gap-1 rounded-md border border-accent/30 bg-accent/10 px-1.5 py-0.5 text-[10px] font-medium text-accent transition-colors hover:bg-accent/20"

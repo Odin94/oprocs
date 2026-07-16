@@ -1,6 +1,9 @@
 node_modules/
 out/
 dist/
+src-tauri/target/
+src-tauri/gen/
+.tauri-local/
 release/
 *.log
 .DS_Store
@@ -10,7 +13,4 @@ Thumbs.db
 oprocs/
 .oprocs.lock
 plans.md
-
-.env
-
 .ignored/

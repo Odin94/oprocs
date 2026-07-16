@@ -1,0 +1,13 @@
+{
+    "$schema": "../gen/schemas/desktop-schema.json",
+    "identifier": "default",
+    "description": "Permissions required by the oprocs desktop window",
+    "windows": ["main"],
+    "permissions": [
+        "core:default",
+        "dialog:allow-open",
+        "opener:allow-open-url",
+        "process:allow-restart",
+        "updater:default"
+    ]
+}
