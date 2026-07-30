@@ -1,6 +1,7 @@
 mod app_config;
 mod config;
 mod process_manager;
+mod shell_env;
 mod system;
 mod types;
 mod watchdog;
@@ -59,8 +60,15 @@ async fn load_config(
         Ok(loaded) => loaded,
         Err(error) => return Ok(LoadConfigResult::Error { error }),
     };
+    let shell_directory = loaded.config_dir.clone();
+    let shell_path =
+        tokio::task::spawn_blocking(move || shell_env::resolve_path(Some(&shell_directory)))
+            .await
+            .ok()
+            .flatten();
     state.manager.begin_reload();
     state.manager.unregister_all().await;
+    state.manager.set_shell_path(shell_path);
     state.manager.set_config_dir(loaded.config_dir.clone());
     let lock = state.manager.read_lock();
     if let Some(lock) = &lock {

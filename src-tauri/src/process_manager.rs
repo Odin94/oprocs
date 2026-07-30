@@ -63,6 +63,7 @@ struct ProcEntry {
 struct ProcessManagerInner {
     entries: Mutex<IndexMap<String, ProcEntry>>,
     config_dir: Mutex<PathBuf>,
+    shell_path: Mutex<Option<std::ffi::OsString>>,
     app_config: AppConfig,
     app: AppHandle,
     watchdog: Option<Watchdog>,
@@ -82,6 +83,7 @@ impl ProcessManager {
             inner: Arc::new(ProcessManagerInner {
                 entries: Mutex::new(IndexMap::new()),
                 config_dir: Mutex::new(PathBuf::new()),
+                shell_path: Mutex::new(None),
                 app_config,
                 app,
                 watchdog,
@@ -95,6 +97,12 @@ impl ProcessManager {
     pub fn set_config_dir(&self, directory: PathBuf) {
         if let Ok(mut config_dir) = self.inner.config_dir.lock() {
             *config_dir = directory;
+        }
+    }
+
+    pub fn set_shell_path(&self, path: Option<std::ffi::OsString>) {
+        if let Ok(mut shell_path) = self.inner.shell_path.lock() {
+            *shell_path = path;
         }
     }
 
@@ -321,7 +329,8 @@ impl ProcessManager {
                 .stdin(Stdio::null())
                 .stdout(Stdio::piped())
                 .stderr(Stdio::piped());
-            apply_environment(&mut command, &config);
+            let shell_path = self.inner.shell_path.lock().unwrap().clone();
+            apply_environment(&mut command, &config, shell_path.as_deref());
             configure_process_group(&mut command);
 
             let mut child = match command.spawn() {
@@ -1104,7 +1113,11 @@ fn windows_utf8_arguments(program: &str, arguments: &[String]) -> Vec<String> {
     arguments.to_vec()
 }
 
-fn apply_environment(command: &mut Command, config: &ProcConfig) {
+fn apply_environment(
+    command: &mut Command,
+    config: &ProcConfig,
+    shell_path: Option<&std::ffi::OsStr>,
+) {
     if let Some(environment) = &config.env {
         for (name, value) in environment {
             match value {
@@ -1117,9 +1130,30 @@ fn apply_environment(command: &mut Command, config: &ProcConfig) {
             }
         }
     }
+    let configured_path = config
+        .env
+        .as_ref()
+        .is_some_and(|environment| environment.contains_key("PATH"));
+    if !configured_path {
+        if let Some(shell_path) = shell_path {
+            command.env("PATH", shell_path);
+        }
+    }
     if !config.add_path.is_empty() {
         let mut paths: Vec<_> = config.add_path.iter().map(PathBuf::from).collect();
-        if let Some(existing) = std::env::var_os("PATH") {
+        let existing = if configured_path {
+            config
+                .env
+                .as_ref()
+                .and_then(|environment| environment.get("PATH"))
+                .and_then(|value| value.as_ref())
+                .map(std::ffi::OsString::from)
+        } else {
+            shell_path
+                .map(std::ffi::OsString::from)
+                .or_else(|| std::env::var_os("PATH"))
+        };
+        if let Some(existing) = existing {
             paths.extend(std::env::split_paths(&existing));
         }
         if let Ok(path) = std::env::join_paths(paths) {
@@ -1179,6 +1213,14 @@ where
 mod tests {
     use super::*;
 
+    fn command_environment(command: &Command, name: &str) -> Option<Option<std::ffi::OsString>> {
+        command
+            .as_std()
+            .get_envs()
+            .find(|(key, _)| *key == name)
+            .map(|(_, value)| value.map(std::ffi::OsString::from))
+    }
+
     #[test]
     fn command_requires_shell_or_argv() {
         assert!(build_command(&ProcConfig::default()).is_err());
@@ -1191,6 +1233,57 @@ mod tests {
             ..ProcConfig::default()
         };
         assert!(build_command(&config).is_ok());
+    }
+
+    #[test]
+    fn applies_the_resolved_shell_path() {
+        let mut command = Command::new("echo");
+        apply_environment(
+            &mut command,
+            &ProcConfig::default(),
+            Some(std::ffi::OsStr::new("/shell/bin")),
+        );
+        assert_eq!(
+            command_environment(&command, "PATH"),
+            Some(Some(std::ffi::OsString::from("/shell/bin")))
+        );
+    }
+
+    #[test]
+    fn preserves_an_explicit_config_path() {
+        let mut command = Command::new("echo");
+        let config = ProcConfig {
+            env: Some(std::collections::HashMap::from([(
+                "PATH".into(),
+                Some("/config/bin".into()),
+            )])),
+            ..ProcConfig::default()
+        };
+        apply_environment(
+            &mut command,
+            &config,
+            Some(std::ffi::OsStr::new("/shell/bin")),
+        );
+        assert_eq!(
+            command_environment(&command, "PATH"),
+            Some(Some(std::ffi::OsString::from("/config/bin")))
+        );
+    }
+
+    #[test]
+    fn prepends_add_path_to_the_resolved_shell_path() {
+        let mut command = Command::new("echo");
+        let config = ProcConfig {
+            add_path: vec!["project-bin".into()],
+            ..ProcConfig::default()
+        };
+        apply_environment(
+            &mut command,
+            &config,
+            Some(std::ffi::OsStr::new("/shell/bin")),
+        );
+        let expected = std::env::join_paths(["project-bin", "/shell/bin"]).unwrap();
+        assert_eq!(command_environment(&command, "PATH"), Some(Some(expected)));
     }
 
     #[test]
