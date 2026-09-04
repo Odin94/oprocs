@@ -9,6 +9,7 @@ import { toast } from "sonner"
 
 type ProcessListProps = {
     procs: ProcInfo[]
+    configDir: string
     selectedProcId: string | null
     onSelect: (id: string) => void
     onStart: (id: string) => Promise<unknown>
@@ -44,6 +45,7 @@ function StatusDot({ proc }: { proc: ProcInfo }) {
 
 export const ProcessList = ({
     procs,
+    configDir,
     selectedProcId,
     onSelect,
     onStart,
@@ -161,15 +163,20 @@ export const ProcessList = ({
 
     return (
         <aside className="cozy-sidebar-shell flex h-full w-64 flex-col border-r border-border bg-card">
-            <div className="cozy-sidebar-section flex items-center justify-between border-b border-border px-4 py-3">
-                <button
-                    type="button"
-                    onClick={onOpenSettings}
-                    className="-ml-1 rounded-md px-1 py-0.5 text-left text-sm font-semibold tracking-wide text-foreground transition-colors hover:bg-surface-hover focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-card"
-                    title="Open settings"
-                >
-                    {theme === "cozy" ? "✨ oprocs" : "oprocs"}
-                </button>
+            <div className="cozy-sidebar-section flex items-center gap-2 border-b border-border px-4 py-3">
+                <div className="min-w-0 flex-1">
+                    <button
+                        type="button"
+                        onClick={onOpenSettings}
+                        className="-ml-1 rounded-md px-1 py-0.5 text-left text-sm font-semibold tracking-wide text-foreground transition-colors hover:bg-surface-hover focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-card"
+                        title="Open settings"
+                    >
+                        {theme === "cozy" ? "✨ oprocs" : "oprocs"}
+                    </button>
+                    <p className="mt-0.5 truncate text-[11px] text-muted-foreground" title={configDir}>
+                        {configDir}
+                    </p>
+                </div>
                 <button
                     type="button"
                     onClick={onToggleTheme}

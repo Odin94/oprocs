@@ -370,6 +370,7 @@ export default function App() {
             <div className="relative z-10 flex min-h-0 flex-1 overflow-hidden">
                 <ProcessList
                     procs={config.procs}
+                    configDir={config.configDir}
                     selectedProcId={selectedProcId}
                     onSelect={setSelectedProcId}
                     onStart={(id: string) => api?.startProc(id) ?? Promise.resolve()}

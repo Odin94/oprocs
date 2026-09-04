@@ -35,7 +35,7 @@ const createApi = () => ({
     getDefaultConfigPath: vi.fn().mockResolvedValue("/workspace/mprocs.yaml"),
     loadConfig: vi.fn().mockImplementation(async (path: string) => ({
         configPath: path || "/workspace/alternate.yaml",
-        configDir: "/workspace",
+        configDir: path ? "/workspace" : "/alternate",
         procs: [
             { id: "backend", name: "backend" },
             { id: "frontend", name: "frontend" },
@@ -101,6 +101,7 @@ describe("oprocs GUI with the desktop bridge", () => {
         const user = userEvent.setup()
 
         expect(api.loadConfig).toHaveBeenCalledWith("/workspace/mprocs.yaml")
+        expect(screen.getByTitle("/workspace").textContent).toBe("/workspace")
         expect(screen.getAllByText("running").length).toBeGreaterThan(0)
         expect(screen.getAllByText("stopped").length).toBeGreaterThan(0)
 
@@ -162,6 +163,7 @@ describe("oprocs GUI with the desktop bridge", () => {
 
         await user.click(screen.getByTitle("Change config"))
         expect(api.loadConfig).toHaveBeenLastCalledWith("")
+        expect((await screen.findByTitle("/alternate")).textContent).toBe("/alternate")
 
         act(() => listeners.updateDownloaded?.("0.3.3"))
         expect(await screen.findByText("Update v0.3.3 ready")).toBeTruthy()
