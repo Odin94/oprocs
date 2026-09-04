@@ -29,15 +29,15 @@ platform's installer. The app auto-updates from [GitHub Releases](https://github
 
 For publishing a release, see [RELEASING.md](./RELEASING.md).
 
-On MacOS, move oprocs into your applications and alias oprocs to run "open /Applications/oprocs.app --args $PWD"
+On macOS, build and install the app plus its terminal command with:
 
-```fish
-# ~/.config/fish/config.fish
-function oprocs
-    /Applications/oprocs.app/Contents/MacOS/oprocs $PWD >/dev/null 2>&1 &
-    disown
-end
+```bash
+pnpm run install:mac
 ```
+
+The script installs the app at `/Applications/oprocs.app` and a launcher at `/usr/local/bin/oprocs`; it may ask for
+an administrator password. Run `oprocs` from a project directory to open that directory's config, or pass another
+directory explicitly with `oprocs /path/to/project`.
 
 ## Config format
 

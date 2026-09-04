@@ -12,6 +12,7 @@
         "build:win": "tauri build --bundles nsis",
         "build:mac": "tauri build --bundles app,dmg",
         "build:linux": "tauri build --bundles appimage",
+        "install:mac": "bash scripts/build-install-macos.sh",
         "check": "pnpm run typecheck && pnpm run lint && pnpm run fmt:check && pnpm test && cargo test --manifest-path src-tauri/Cargo.toml",
         "dev": "tauri dev",
         "dev:web": "vite",

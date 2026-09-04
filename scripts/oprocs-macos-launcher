@@ -1,0 +1,25 @@
+#!/bin/sh
+
+set -eu
+
+app_path="/Applications/oprocs.app"
+app_binary="$app_path/Contents/MacOS/oprocs"
+
+if [ ! -x "$app_binary" ]; then
+    echo "oprocs is not installed at $app_path" >&2
+    echo "Run 'pnpm run install:mac' from the oprocs repository." >&2
+    exit 1
+fi
+
+# Commands that intentionally write to the terminal should bypass macOS `open`.
+if [ "${1-}" = "init-config" ]; then
+    exec "$app_binary" "$@"
+fi
+
+# A flag-only invocation still needs the calling terminal's working directory.
+# If the first argument is a path, the app uses that path instead.
+case "${1-}" in
+    "" | -*) set -- "$@" "$PWD" ;;
+esac
+
+exec open -n "$app_path" --args "$@"
