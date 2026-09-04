@@ -33,6 +33,7 @@ class SearchWorker {
 const createApi = () => ({
     getAppConfig: vi.fn().mockResolvedValue({ disable_animations: true }),
     getDefaultConfigPath: vi.fn().mockResolvedValue("/workspace/mprocs.yaml"),
+    setWindowAppearance: vi.fn().mockResolvedValue(undefined),
     loadConfig: vi.fn().mockImplementation(async (path: string) => ({
         configPath: path || "/workspace/alternate.yaml",
         configDir: path ? "/workspace" : "/alternate",
@@ -102,6 +103,7 @@ describe("oprocs GUI with the desktop bridge", () => {
 
         expect(api.loadConfig).toHaveBeenCalledWith("/workspace/mprocs.yaml")
         expect(screen.getByTitle("/workspace").textContent).toBe("/workspace")
+        expect(api.setWindowAppearance).toHaveBeenCalledWith("tech")
         expect(screen.getAllByText("running").length).toBeGreaterThan(0)
         expect(screen.getAllByText("stopped").length).toBeGreaterThan(0)
 
@@ -169,6 +171,14 @@ describe("oprocs GUI with the desktop bridge", () => {
         expect(await screen.findByText("Update v0.3.3 ready")).toBeTruthy()
         await user.click(screen.getByText("Restart to update"))
         expect(api.quitAndInstall).toHaveBeenCalledOnce()
+    })
+
+    it("updates the native title bar for the selected theme", async () => {
+        const api = await renderApp()
+        const user = userEvent.setup()
+
+        await user.click(screen.getByTitle("Switch to cozy theme"))
+        expect(api.setWindowAppearance).toHaveBeenLastCalledWith("cozy")
     })
 
     it("opens settings, persists animation preference, and supports Escape", async () => {

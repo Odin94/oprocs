@@ -30,6 +30,10 @@ let pendingUpdate: PendingUpdate | null = null
 const updateAvailableListeners = new Set<(version: string) => void>()
 const updateDownloadedListeners = new Set<(version: string) => void>()
 const updateErrorListeners = new Set<(message: string) => void>()
+const windowColors = {
+    tech: "#121318",
+    cozy: "#f7e6ec",
+} as const
 
 const reportUpdateError = (error: unknown) => {
     const message = error instanceof Error ? error.message : String(error)
@@ -53,6 +57,14 @@ const checkForUpdates = async () => {
 window.oprocsAPI = {
     getAppConfig: () => invoke("get_app_config"),
     getDefaultConfigPath: () => invoke("get_default_config_path"),
+    setWindowAppearance: async (theme) => {
+        const { getCurrentWindow } = await import("@tauri-apps/api/window")
+        const currentWindow = getCurrentWindow()
+        await Promise.all([
+            currentWindow.setBackgroundColor(windowColors[theme]),
+            currentWindow.setTheme(theme === "cozy" ? "light" : "dark"),
+        ])
+    },
     loadConfig: async (configPath: string) => {
         await nativeListenersReady
         let path = configPath

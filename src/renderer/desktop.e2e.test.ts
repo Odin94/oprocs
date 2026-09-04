@@ -10,12 +10,20 @@ const plugins = vi.hoisted(() => ({
     openUrl: vi.fn(),
     checkForUpdate: vi.fn(),
     relaunch: vi.fn(),
+    setBackgroundColor: vi.fn(),
+    setTheme: vi.fn(),
 }))
 
 vi.mock("@tauri-apps/plugin-dialog", () => ({ open: plugins.openDialog }))
 vi.mock("@tauri-apps/plugin-opener", () => ({ openUrl: plugins.openUrl }))
 vi.mock("@tauri-apps/plugin-updater", () => ({ check: plugins.checkForUpdate }))
 vi.mock("@tauri-apps/plugin-process", () => ({ relaunch: plugins.relaunch }))
+vi.mock("@tauri-apps/api/window", () => ({
+    getCurrentWindow: () => ({
+        setBackgroundColor: plugins.setBackgroundColor,
+        setTheme: plugins.setTheme,
+    }),
+}))
 
 const importDesktopApi = async (handler: Parameters<typeof mockIPC>[0]) => {
     mockIPC(handler, { shouldMockEvents: true })
@@ -62,12 +70,15 @@ describe("Tauri desktop IPC bridge", () => {
 
         expect(await api.getAppConfig()).toEqual({ disable_animations: true })
         expect(await api.getDefaultConfigPath()).toBe("/workspace/mprocs.yaml")
+        await api.setWindowAppearance("cozy")
         await expect(api.loadConfig("/workspace/mprocs.yaml")).resolves.toMatchObject({ runningIds: ["web"] })
         await expect(api.startProc("web")).resolves.toEqual({ ok: true })
         await expect(api.stopProc("web")).resolves.toEqual({ ok: true })
         await expect(api.restartProc("web")).resolves.toEqual({ ok: true })
         await expect(api.getPortOccupant(3000)).resolves.toMatchObject({ pid: 42, command: "node" })
         await expect(api.killPortOccupant(3000)).resolves.toMatchObject({ ok: true })
+        expect(plugins.setBackgroundColor).toHaveBeenCalledWith("#f7e6ec")
+        expect(plugins.setTheme).toHaveBeenCalledWith("light")
 
         expect(invocations).toEqual(
             expect.arrayContaining([

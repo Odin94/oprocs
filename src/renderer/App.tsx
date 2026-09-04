@@ -35,6 +35,7 @@ declare global {
         oprocsAPI?: {
             getAppConfig: () => Promise<{ disable_animations?: boolean }>
             getDefaultConfigPath: () => Promise<string | null>
+            setWindowAppearance: (theme: "tech" | "cozy") => Promise<void>
             loadConfig: (configPath: string) => Promise<
                 | {
                       configPath: string
@@ -207,6 +208,10 @@ export default function App() {
     useEffect(() => {
         document.documentElement.dataset.animations = disableAnimations ? "off" : "on"
     }, [disableAnimations])
+
+    useEffect(() => {
+        void api?.setWindowAppearance(theme)
+    }, [theme])
 
     useEffect(() => {
         if (!settingsOpen) return
