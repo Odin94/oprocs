@@ -18,6 +18,7 @@ use crate::{
 };
 use std::{
     path::{Path, PathBuf},
+    sync::atomic::{AtomicBool, Ordering},
     time::Duration,
 };
 use tauri::{Emitter, Manager};
@@ -28,6 +29,7 @@ struct AppState {
     start_dir: Option<PathBuf>,
     no_cmd_rewrite: bool,
     lifecycle_lock: tokio::sync::Mutex<()>,
+    is_shutting_down: AtomicBool,
 }
 
 #[tauri::command]
@@ -215,7 +217,7 @@ fn parse_start_directory() -> Option<PathBuf> {
     })
 }
 
-fn install_signal_handlers(app: tauri::AppHandle, manager: ProcessManager) {
+fn install_signal_handlers(app: tauri::AppHandle) {
     #[cfg(unix)]
     tauri::async_runtime::spawn(async move {
         let mut interrupt =
@@ -228,17 +230,22 @@ fn install_signal_handlers(app: tauri::AppHandle, manager: ProcessManager) {
             _ = interrupt.recv() => {},
             _ = terminate.recv() => {},
         }
-        manager.shutdown_sync();
         app.exit(0);
     });
 
     #[cfg(windows)]
     tauri::async_runtime::spawn(async move {
         if tokio::signal::ctrl_c().await.is_ok() {
-            manager.shutdown_sync();
             app.exit(0);
         }
     });
+}
+
+fn shutdown_processes_once(app: &tauri::AppHandle) {
+    let state = app.state::<AppState>();
+    if !state.is_shutting_down.swap(true, Ordering::SeqCst) {
+        state.manager.shutdown_sync();
+    }
 }
 
 pub fn run() {
@@ -272,13 +279,14 @@ pub fn run() {
             let watchdog = Watchdog::start().map_err(std::io::Error::other)?;
             let manager =
                 ProcessManager::new(app.handle().clone(), app_config.clone(), Some(watchdog));
-            install_signal_handlers(app.handle().clone(), manager.clone());
+            install_signal_handlers(app.handle().clone());
             app.manage(AppState {
                 manager,
                 app_config: app_config.clone(),
                 start_dir,
                 no_cmd_rewrite,
                 lifecycle_lock: tokio::sync::Mutex::new(()),
+                is_shutting_down: AtomicBool::new(false),
             });
             Ok(())
         })
@@ -295,9 +303,18 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building the oprocs application");
 
-    app.run(|app, event| {
-        if matches!(event, tauri::RunEvent::Exit) {
-            app.state::<AppState>().manager.shutdown_sync();
+    app.run(|app, event| match event {
+        tauri::RunEvent::WindowEvent {
+            event: tauri::WindowEvent::CloseRequested { api, .. },
+            ..
+        } => {
+            api.prevent_close();
+            shutdown_processes_once(app);
+            app.exit(0);
         }
+        tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit => {
+            shutdown_processes_once(app);
+        }
+        _ => {}
     });
 }
