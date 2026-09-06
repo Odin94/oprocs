@@ -81,10 +81,22 @@ describe("oprocs GUI with the desktop bridge", () => {
             configurable: true,
             value: { writeText: vi.fn().mockResolvedValue(undefined) },
         })
+        vi.spyOn(window, "getComputedStyle").mockImplementation(
+            (element) =>
+                ({
+                    getPropertyValue: (property) =>
+                        property === "--native-titlebar-background"
+                            ? (element as HTMLElement).dataset.theme === "cozy"
+                                ? "#f7e6ec"
+                                : "#121318"
+                            : "",
+                }) as CSSStyleDeclaration,
+        )
     })
 
     afterEach(() => {
         cleanup()
+        vi.restoreAllMocks()
         delete window.oprocsAPI
     })
 
@@ -103,7 +115,7 @@ describe("oprocs GUI with the desktop bridge", () => {
 
         expect(api.loadConfig).toHaveBeenCalledWith("/workspace/mprocs.yaml")
         expect(screen.getByTitle("/workspace").textContent).toBe("/workspace")
-        expect(api.setWindowAppearance).toHaveBeenCalledWith("tech")
+        expect(api.setWindowAppearance).toHaveBeenCalledWith("tech", "#121318")
         expect(screen.getAllByText("running").length).toBeGreaterThan(0)
         expect(screen.getAllByText("stopped").length).toBeGreaterThan(0)
 
@@ -117,6 +129,24 @@ describe("oprocs GUI with the desktop bridge", () => {
         expect(api.restartProc).toHaveBeenCalledWith("backend")
         expect(api.restartProc).toHaveBeenCalledTimes(2)
         expect(api.startProc).toHaveBeenCalledTimes(2)
+    })
+
+    it("keeps the complete config directory available when its label is truncated", async () => {
+        const configDir = "/workspace/projects/a-very-long-directory-name/with/a/nested/config"
+        const api = createApi()
+        api.loadConfig.mockResolvedValue({
+            configPath: `${configDir}/mprocs.yaml`,
+            configDir,
+            procs: [{ id: "backend", name: "backend" }],
+            runningIds: ["backend"],
+        })
+        window.oprocsAPI = api
+        const { default: App } = await import("./App")
+        render(<App />)
+
+        const configDirLabel = await screen.findByTitle(configDir)
+        expect(configDirLabel.textContent).toBe(configDir)
+        expect(configDirLabel.className).toContain("truncate")
     })
 
     it("reacts to lifecycle/output events and opens detected URLs", async () => {
@@ -178,7 +208,22 @@ describe("oprocs GUI with the desktop bridge", () => {
         const user = userEvent.setup()
 
         await user.click(screen.getByTitle("Switch to cozy theme"))
-        expect(api.setWindowAppearance).toHaveBeenLastCalledWith("cozy")
+        expect(api.setWindowAppearance).toHaveBeenLastCalledWith("cozy", "#f7e6ec")
+
+        await user.click(screen.getByTitle("Switch to tech theme"))
+        expect(api.setWindowAppearance).toHaveBeenLastCalledWith("tech", "#121318")
+    })
+
+    it("handles native title bar updates that fail", async () => {
+        const api = createApi()
+        api.setWindowAppearance.mockRejectedValue(new Error("Native API unavailable"))
+        window.oprocsAPI = api
+        const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined)
+        const { default: App } = await import("./App")
+        render(<App />)
+
+        await screen.findByText("frontend")
+        await waitFor(() => expect(warn).toHaveBeenCalledOnce())
     })
 
     it("opens settings, persists animation preference, and supports Escape", async () => {

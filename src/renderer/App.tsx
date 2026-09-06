@@ -35,7 +35,7 @@ declare global {
         oprocsAPI?: {
             getAppConfig: () => Promise<{ disable_animations?: boolean }>
             getDefaultConfigPath: () => Promise<string | null>
-            setWindowAppearance: (theme: "tech" | "cozy") => Promise<void>
+            setWindowAppearance: (theme: "tech" | "cozy", backgroundColor: string) => Promise<void>
             loadConfig: (configPath: string) => Promise<
                 | {
                       configPath: string
@@ -103,6 +103,8 @@ export default function App() {
     const [clearedOutputSnapshot, setClearedOutputSnapshot] = useState<{ procId: string; content: string } | null>(null)
     const searchIdRef = useRef(0)
     const workerRef = useRef<Worker | null>(null)
+    const appRootRef = useRef<HTMLDivElement>(null)
+    const hasReportedWindowAppearanceError = useRef(false)
 
     const lines = useMemo(() => {
         if (!selectedProcId) return []
@@ -210,7 +212,15 @@ export default function App() {
     }, [disableAnimations])
 
     useEffect(() => {
-        void api?.setWindowAppearance(theme)
+        const root = appRootRef.current
+        if (!api || !root) return
+        const backgroundColor = getComputedStyle(root).getPropertyValue("--native-titlebar-background").trim()
+        if (!backgroundColor) return
+        void api.setWindowAppearance(theme, backgroundColor).catch((error) => {
+            if (hasReportedWindowAppearanceError.current) return
+            hasReportedWindowAppearanceError.current = true
+            console.warn("Could not update the native window appearance", error)
+        })
     }, [theme])
 
     useEffect(() => {
@@ -329,6 +339,7 @@ export default function App() {
     if (!config) {
         return (
             <div
+                ref={appRootRef}
                 data-theme={theme}
                 data-animations={disableAnimations ? "off" : "on"}
                 className={`flex h-screen min-h-0 w-full flex-1 ${theme === "cozy" ? "cozy-bg" : ""}`}
@@ -347,6 +358,7 @@ export default function App() {
 
     return (
         <div
+            ref={appRootRef}
             data-theme={theme}
             data-animations={disableAnimations ? "off" : "on"}
             className={`flex h-screen min-h-0 w-full flex-1 flex-col ${theme === "cozy" ? "cozy-bg" : ""}`}

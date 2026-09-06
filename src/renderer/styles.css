@@ -71,6 +71,7 @@
         --sidebar-accent-foreground: 220 13% 91%;
         --sidebar-border: 228 10% 16%;
         --sidebar-ring: 142 72% 50%;
+        --native-titlebar-background: #121318;
         --font-display: "Inter", system-ui, sans-serif;
         --font-body: "Inter", system-ui, sans-serif;
         --font-mono: "JetBrains Mono", monospace;
@@ -120,6 +121,7 @@
         --sidebar-accent-foreground: 340 20% 25%;
         --sidebar-border: 330 25% 90%;
         --sidebar-ring: 330 65% 65%;
+        --native-titlebar-background: #f7e6ec;
         --font-display: "Nunito", system-ui, sans-serif;
         --font-body: "Nunito", system-ui, sans-serif;
         --font-mono: "JetBrains Mono", monospace;

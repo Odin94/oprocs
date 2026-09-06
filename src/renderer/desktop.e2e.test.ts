@@ -70,7 +70,7 @@ describe("Tauri desktop IPC bridge", () => {
 
         expect(await api.getAppConfig()).toEqual({ disable_animations: true })
         expect(await api.getDefaultConfigPath()).toBe("/workspace/mprocs.yaml")
-        await api.setWindowAppearance("cozy")
+        await api.setWindowAppearance("cozy", "#f7e6ec")
         await expect(api.loadConfig("/workspace/mprocs.yaml")).resolves.toMatchObject({ runningIds: ["web"] })
         await expect(api.startProc("web")).resolves.toEqual({ ok: true })
         await expect(api.stopProc("web")).resolves.toEqual({ ok: true })
@@ -79,6 +79,10 @@ describe("Tauri desktop IPC bridge", () => {
         await expect(api.killPortOccupant(3000)).resolves.toMatchObject({ ok: true })
         expect(plugins.setBackgroundColor).toHaveBeenCalledWith("#f7e6ec")
         expect(plugins.setTheme).toHaveBeenCalledWith("light")
+
+        await api.setWindowAppearance("tech", "#121318")
+        expect(plugins.setBackgroundColor).toHaveBeenLastCalledWith("#121318")
+        expect(plugins.setTheme).toHaveBeenLastCalledWith("dark")
 
         expect(invocations).toEqual(
             expect.arrayContaining([
